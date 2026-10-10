@@ -29,6 +29,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+web = ["fastapi>=0.115", "uvicorn>=0.30"]
 dev = [
     "ruff>=0.16",
     "pytest>=8.0",
@@ -47,11 +48,12 @@ tradingagents = "cli.main:app"
 version = {attr = "tradingagents.__version__"}
 
 [tool.setuptools.packages.find]
-include = ["tradingagents*", "cli*"]
+include = ["tradingagents*", "cli*", "dashboard*"]
 
 [tool.setuptools.package-data]
 cli = ["static/*"]
 tradingagents = ["assets/*.svg"]
+dashboard = ["static/*", "static/assets/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
