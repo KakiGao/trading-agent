@@ -41,6 +41,7 @@ export default function ModelConfiguration({
     grsai_model: "gemini-3.1-pro",
     grsai_base_url: "https://grsaiapi.com/v1",
     g4f_model: "gemini-2.5-flash",
+    g4f_thinking: "low",
   };
   const models = { ...defaults, ...settings.models };
   if (models.provider === "gemini_web") models.provider = "g4f";
@@ -184,11 +185,23 @@ export default function ModelConfiguration({
                     <option value="gemini-2.0-flash">gemini-2.0-flash</option>
                   </select>
                 </label>
+                <label>
+                  思考强度
+                  <select
+                    value={form.g4f_thinking || "low"}
+                    onChange={(e) =>
+                      setForm({ ...form, g4f_thinking: e.target.value })
+                    }
+                  >
+                    <option value="low">低（默认）</option>
+                    <option value="medium">中（扩展思考）</option>
+                    <option value="high">高（扩展思考）</option>
+                  </select>
+                </label>
               </div>
               <p className="hint">
                 通过 gpt4free（g4f）调用 Gemini。Flash 可匿名；Pro
-                需粘贴 EditThisCookie 导出的 JSON（保存到本机
-                ~/.g4f/cookies/google.json）。
+                需粘贴 Cookie。思考强度对应 g4f 的 reasoning_effort：低=关闭扩展思考，中/高=开启。
               </p>
             </>
           ) : (

@@ -66,6 +66,35 @@ export const tickerList = (settings) => [
   ]),
 ];
 
+/** YYYY-MM-DD minus daysBack in calendar days (UTC date arithmetic). */
+export function dayOffset(isoDay, daysBack) {
+  const [y, m, d] = isoDay.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - daysBack);
+  return dt.toISOString().slice(0, 10);
+}
+
+/** Filter research activity by trade_date; active jobs always stay visible. */
+export function filterActivityJobs(jobs, { preset = "7", from = "", to = "", today }) {
+  if (!today) return jobs;
+  let start = from,
+    end = to;
+  if (preset !== "custom") {
+    if (preset === "all") return jobs;
+    const days = Number(preset);
+    end = today;
+    start = dayOffset(today, Math.max(0, days - 1));
+  }
+  return jobs.filter((job) => {
+    if (isActive(job)) return true;
+    const day = String(job.trade_date || job.created || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return true;
+    if (start && day < start) return false;
+    if (end && day > end) return false;
+    return true;
+  });
+}
+
 export async function request(path, data, token, signal) {
   const response = await fetch(`/api/${path}`, {
     signal,

@@ -70,6 +70,10 @@ class Progress(BaseCallbackHandler):
             self.stage = name
             self._emit({"type": "stage", "stage": name})
 
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        # Show activity while a slow provider (e.g. Gemini Pro) is still generating.
+        self._emit({"type": "text", "stage": self.stage, "text": "…模型生成中"})
+
     def on_llm_end(self, response, **kwargs):
         texts = []
         for generations in getattr(response, "generations", []) or []:

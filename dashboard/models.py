@@ -40,6 +40,8 @@ class ModelSettings(BaseModel):
     grsai_base_url: str = GRSAI_BASE
     grsai_model: Literal["gemini-3.1-pro"] = "gemini-3.1-pro"
     g4f_model: Literal["gemini-3.1-pro", "gemini-2.5-flash", "gemini-2.0-flash"] = "gemini-2.5-flash"
+    # g4f Gemini: low = no expanded thinking (default); medium/high turn it on
+    g4f_thinking: Literal["low", "medium", "high"] = "low"
 
     @field_validator("provider", mode="before")
     @classmethod
@@ -96,6 +98,7 @@ def worker_config(config, model_settings):
             backend_url=None,
             quick_think_llm=selected.g4f_model,
             deep_think_llm=selected.g4f_model,
+            g4f_thinking=selected.g4f_thinking,
         )
     else:
         cfg.update(

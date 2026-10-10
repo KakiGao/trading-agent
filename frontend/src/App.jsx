@@ -30,7 +30,15 @@ import {
 import { Schedule, Memory, Notifications, Preferences } from "./views.jsx";
 import Portfolio from "./Portfolio.jsx";
 import ModelConfiguration from "./ModelConfiguration.jsx";
-import { dateLabel, tickerList, isActive, stages, request } from "./data.js";
+import {
+  dateLabel,
+  tickerList,
+  isActive,
+  stages,
+  request,
+  dayOffset,
+  filterActivityJobs,
+} from "./data.js";
 
 const navigation = [
   ["overview", "研究概览", LayoutGrid],
@@ -47,7 +55,10 @@ export default function App() {
     [pinned, setPinned] = useState(null),
     [add, setAdd] = useState(""),
     [query, setQuery] = useState(""),
-    [busy, setBusy] = useState(null);
+    [busy, setBusy] = useState(null),
+    [activityPreset, setActivityPreset] = useState("7"),
+    [activityFrom, setActivityFrom] = useState(""),
+    [activityTo, setActivityTo] = useState("");
   const timer = useRef(null);
   const message = useCallback((text, error = false) => {
     setToast({ text, error });
@@ -133,6 +144,13 @@ export default function App() {
     });
   const active = jobs.filter(isActive),
     completed = jobs.filter((j) => j.status === "completed");
+  const today = state?.today || dayOffset(new Date().toISOString().slice(0, 10), 0);
+  const activityJobs = filterActivityJobs(jobs, {
+    preset: activityPreset,
+    from: activityFrom,
+    to: activityTo,
+    today,
+  });
   if (!state)
     return (
       <div className="startup">
@@ -439,9 +457,57 @@ export default function App() {
                   <span className="eyebrow">RESEARCH ACTIVITY</span>
                   <h2>研究动态</h2>
                 </div>
-                <span className="activity-count">{jobs.length} 项研究记录</span>
+                <div className="activity-tools">
+                  <label className="activity-range">
+                    <span className="sr-only">时间范围</span>
+                    <select
+                      value={activityPreset}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setActivityPreset(value);
+                        if (value === "custom" && !activityFrom && !activityTo) {
+                          setActivityFrom(dayOffset(today, 6));
+                          setActivityTo(today);
+                        }
+                      }}
+                      aria-label="研究动态时间范围"
+                    >
+                      <option value="7">近 7 天</option>
+                      <option value="30">近 30 天</option>
+                      <option value="90">近 90 天</option>
+                      <option value="all">全部</option>
+                      <option value="custom">自定义</option>
+                    </select>
+                  </label>
+                  {activityPreset === "custom" && (
+                    <div className="activity-range-custom">
+                      <input
+                        type="date"
+                        value={activityFrom}
+                        max={activityTo || today}
+                        onChange={(e) => setActivityFrom(e.target.value)}
+                        aria-label="开始日期"
+                      />
+                      <span>至</span>
+                      <input
+                        type="date"
+                        value={activityTo}
+                        min={activityFrom || undefined}
+                        max={today}
+                        onChange={(e) => setActivityTo(e.target.value)}
+                        aria-label="结束日期"
+                      />
+                    </div>
+                  )}
+                  <span className="activity-count">
+                    {activityJobs.length} 项研究记录
+                    {activityJobs.length !== jobs.length
+                      ? ` · 共 ${jobs.length}`
+                      : ""}
+                  </span>
+                </div>
               </div>
-              {jobs.length ? (
+              {activityJobs.length ? (
                 <div className="table-scroll">
                   <table>
                     <thead>
@@ -455,7 +521,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {jobs.map((j) => (
+                      {activityJobs.map((j) => (
                         <tr
                           key={j.id}
                           className={
@@ -523,8 +589,16 @@ export default function App() {
                   </table>
                 </div>
               ) : (
-                <Empty title="每份研究，都在这里留下记录">
-                  从自选列表点击「分析」开始。取消的任务会自动移除。
+                <Empty
+                  title={
+                    jobs.length
+                      ? "这段时间没有研究记录"
+                      : "每份研究，都在这里留下记录"
+                  }
+                >
+                  {jobs.length
+                    ? "试试扩大时间范围，或切换到「全部」。"
+                    : "从自选列表点击「分析」开始。取消的任务会自动移除。"}
                 </Empty>
               )}
             </section>

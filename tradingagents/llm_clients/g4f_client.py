@@ -93,6 +93,8 @@ class G4FChat(BaseChatModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     model_name: str = "gemini-2.5-flash"
     timeout: float = 180.0
+    # g4f maps: none/minimal/low → no expanded thinking; medium/high/xhigh → expanded
+    reasoning_effort: str | None = None
 
     @property
     def _llm_type(self) -> str:
@@ -120,10 +122,13 @@ class G4FChat(BaseChatModel):
             "provider": Provider.Gemini,
             "web_search": False,
         }
+        if self.reasoning_effort:
+            create_kwargs["reasoning_effort"] = self.reasoning_effort
         if cookies:
             set_cookies(".google.com", cookies)
             create_kwargs["cookies"] = cookies
         client = Client()
+        # Full reply per turn (not token stream); UI live-log reads on_llm_end.
         response = client.chat.completions.create(**create_kwargs)
         text = (response.choices[0].message.content or "").strip()
         tool_calls = _parse_tool_calls(text) if tools else []
@@ -140,7 +145,13 @@ class G4FClient(BaseLLMClient):
     def get_llm(self) -> Any:
         self.warn_if_unknown_model()
         timeout = float(self.kwargs.get("timeout", 180))
-        return G4FChat(model_name=self.model, timeout=timeout)
+        llm_kwargs: dict[str, Any] = {"model_name": self.model, "timeout": timeout}
+        effort = self.kwargs.get("reasoning_effort")
+        if effort:
+            llm_kwargs["reasoning_effort"] = effort
+        if self.kwargs.get("callbacks"):
+            llm_kwargs["callbacks"] = self.kwargs["callbacks"]
+        return G4FChat(**llm_kwargs)
 
     def validate_model(self) -> bool:
         return validate_model("g4f", self.model)

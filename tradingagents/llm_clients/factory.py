@@ -101,6 +101,10 @@ def build_llm_kwargs(config: dict) -> dict[str, Any]:
         if thinking_level:
             kwargs["thinking_level"] = thinking_level
 
+    elif provider == "g4f":
+        effort = config.get("g4f_thinking") or "low"
+        kwargs["reasoning_effort"] = effort
+
     elif provider == "openai":
         reasoning_effort = config.get("openai_reasoning_effort")
         if reasoning_effort:

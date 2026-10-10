@@ -1192,6 +1192,41 @@ label > textarea {
   font-size: 12px;
   color: #a49993;
 }
+.activity-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.activity-range {
+  margin: 0;
+  color: inherit;
+}
+.activity-range select {
+  width: auto;
+  min-width: 108px;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-radius: 999px;
+  border-color: var(--line);
+  background: #fff;
+  color: var(--ink);
+}
+.activity-range-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.activity-range-custom input[type="date"] {
+  width: auto;
+  min-width: 132px;
+  padding: 7px 10px;
+  font-size: 12px;
+  border-radius: 10px;
+}
 .table-scroll {
   overflow: auto;
   padding: 0 15px 12px;
