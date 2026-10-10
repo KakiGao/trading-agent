@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowUpRight,
   FileText,
   LoaderCircle,
   CircleAlert,
@@ -149,13 +148,18 @@ export function SubmitForm({ onSubmit, onError, children, className = "" }) {
 export function ResultPanel({ job, ticker, allJobs = [], onPick, onDismiss }) {
   const [detail, setDetail] = useState(null),
     [error, setError] = useState(""),
-    [section, setSection] = useState("final_trade_decision");
+    [section, setSection] = useState("final_trade_decision"),
+    [live, setLive] = useState([]);
   const lastId = useRef(null);
+  const liveLog = useRef(null);
+  const stickBottom = useRef(true);
   useEffect(() => {
     if (lastId.current !== job?.id) {
       setDetail(null);
+      setLive([]);
       setSection("final_trade_decision");
       lastId.current = job?.id;
+      stickBottom.current = true;
     }
     setError("");
     if (!job) return;
@@ -167,6 +171,41 @@ export function ResultPanel({ job, ticker, allJobs = [], onPick, onDismiss }) {
       });
     return () => controller.abort();
   }, [job?.id, job?.updated, job?.status]);
+  useEffect(() => {
+    if (!job || !isActive(job)) {
+      setLive([]);
+      return;
+    }
+    let alive = true,
+      timer;
+    const tick = async () => {
+      try {
+        const data = await request(`job/${job.id}/live`);
+        if (!alive) return;
+        const events = data.events || [];
+        setLive((prev) =>
+          prev.length === events.length &&
+          prev.at(-1)?.at === events.at(-1)?.at &&
+          prev.at(-1)?.text === events.at(-1)?.text
+            ? prev
+            : events,
+        );
+      } catch {
+        /* keep last events while polling retries */
+      }
+      if (alive) timer = setTimeout(tick, 1200);
+    };
+    tick();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [job?.id, job?.status]);
+  useEffect(() => {
+    const node = liveLog.current;
+    if (!node || !stickBottom.current) return;
+    node.scrollTop = node.scrollHeight;
+  }, [live]);
   const result = detail?.id === job?.id ? detail?.result : null;
   const sections = Object.keys(reportSections).filter(
     (k) => result?.reports?.[k],
@@ -242,21 +281,64 @@ export function ResultPanel({ job, ticker, allJobs = [], onPick, onDismiss }) {
               点击这只股票旁的「分析」，让研究团队开始工作。
             </Empty>
           ) : isActive(job) ? (
-            <div className="progress-content">
-              <div className="research-orbit">
-                <LoaderCircle size={32} className="spin" strokeWidth={1} />
+            <div className="progress-live">
+              <div className="progress-live-head">
+                <LoaderCircle size={18} className="spin" strokeWidth={1.75} />
+                <div>
+                  <span className="eyebrow">RESEARCH IN PROGRESS</span>
+                  <h3>{stages[job.stage] || job.stage || "启动分析"}</h3>
+                  <p>
+                    后台继续执行，刷新页面不会中断。下方过程仅供即时查看，不永久保存。
+                  </p>
+                </div>
               </div>
-              <span className="eyebrow">RESEARCH IN PROGRESS</span>
-              <h3>{stages[job.stage] || job.stage}</h3>
-              <p>
-                正在结合市场资料形成判断。你可以查看其他标的，任务会继续在后台执行。
-              </p>
-              <div className="workflow">
-                <span>资料分析</span>
-                <i />
-                <span>多空辩论</span>
-                <i />
-                <span>风控决策</span>
+              {(() => {
+                const stage = job.stage || "";
+                const phase = /Aggressive|Conservative|Neutral|Portfolio Manager/.test(
+                  stage,
+                )
+                  ? 3
+                  : /Bull|Bear|Research Manager|^Trader$/.test(stage)
+                    ? 2
+                    : 1;
+                return (
+                  <div className="workflow">
+                    <span className={phase === 1 ? "active" : ""}>资料分析</span>
+                    <i />
+                    <span className={phase === 2 ? "active" : ""}>多空辩论</span>
+                    <i />
+                    <span className={phase === 3 ? "active" : ""}>风控决策</span>
+                  </div>
+                );
+              })()}
+              <div
+                className="live-log"
+                aria-live="polite"
+                aria-label="分析过程"
+                ref={liveLog}
+                onScroll={(e) => {
+                  const node = e.currentTarget;
+                  stickBottom.current =
+                    node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+                }}
+              >
+                {!live.length && (
+                  <p className="live-empty">等待模型输出…</p>
+                )}
+                {live.map((event, index) =>
+                  event.type === "stage" ? (
+                    <div
+                      key={`${event.at}-${index}`}
+                      className="live-stage"
+                    >
+                      {stages[event.stage] || event.stage}
+                    </div>
+                  ) : (
+                    <pre key={`${event.at}-${index}`} className="live-text">
+                      {event.text}
+                    </pre>
+                  ),
+                )}
               </div>
             </div>
           ) : job.status === "failed" || job.status === "interrupted" ? (
@@ -297,15 +379,6 @@ export function ResultPanel({ job, ticker, allJobs = [], onPick, onDismiss }) {
               </div>
               <div className="report-footer">
                 <span>AI 研究建议，请结合自身情况判断</span>
-                {detail.has_report && (
-                  <a
-                    href={`/api/report/${job.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    完整报告 <ArrowUpRight size={14} />
-                  </a>
-                )}
               </div>
             </>
           )}

@@ -240,3 +240,14 @@ class Store:
         with self.connect() as conn:
             row = conn.execute("SELECT rating FROM jobs WHERE ticker=? AND status='completed' AND id!=? ORDER BY created DESC LIMIT 1", (job["ticker"], job["id"])).fetchone()
         return row["rating"] if row else None
+
+    def remove(self, jid):
+        """Drop a finished incomplete job from history (not queued/running)."""
+        with self.lock, self.connect() as conn:
+            row = conn.execute("SELECT status FROM jobs WHERE id=?", (jid,)).fetchone()
+            if not row:
+                return False
+            if row["status"] not in ("failed", "interrupted"):
+                raise ValueError("只能删除未完成或已中断的记录")
+            conn.execute("DELETE FROM jobs WHERE id=?", (jid,))
+        return True

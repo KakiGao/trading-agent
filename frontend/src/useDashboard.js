@@ -68,5 +68,15 @@ export default function useDashboard(onMessage) {
     await refresh();
     onMessage("任务已取消，并从研究动态移除");
   };
-  return { state, online, refresh, mutate, save, run, cancel };
+  const removeJob = async (id) => {
+    await mutate(`job/${id}/delete`, {});
+    hidden.current.add(id);
+    setState((previous) => ({
+      ...previous,
+      jobs: previous.jobs.filter((j) => j.id !== id),
+    }));
+    await refresh();
+    onMessage("未完成记录已删除");
+  };
+  return { state, online, refresh, mutate, save, run, cancel, removeJob };
 }

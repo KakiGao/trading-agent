@@ -39,6 +39,15 @@ function mockServer(extraJobs = []) {
     const path = url.replace("/api/", "");
     let body = {};
     if (path === "state") body = structuredClone(state);
+    else if (path.endsWith("/live"))
+      body = {
+        status: "running",
+        stage: "Market Analyst",
+        events: [
+          { type: "stage", stage: "Market Analyst", at: 1 },
+          { type: "text", stage: "Market Analyst", text: "趋势观察中", at: 2 },
+        ],
+      };
     else if (path.startsWith("job/"))
       body = {
         ...state.jobs.find((j) => j.id === path.slice(4)),
@@ -49,7 +58,6 @@ function mockServer(extraJobs = []) {
             market_report: "趋势仍需观察。",
           },
         },
-        has_report: true,
       };
     else if (path === "run") {
       const { ticker } = JSON.parse(options.body);

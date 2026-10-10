@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Plus,
   Trash2,
   Download,
   ArrowUpRight,
@@ -254,12 +253,6 @@ export default function Portfolio({
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState("overview");
   const formRef = useRef(null);
-  const openLedger = () => {
-    setTab("ledger");
-    queueMicrotask(() =>
-      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-    );
-  };
   const load = async () => {
     setLoading(true);
     try {
@@ -366,12 +359,6 @@ export default function Portfolio({
           <Button busy={loading} onClick={load} aria-label="刷新账本">
             <RefreshCw size={14} />
           </Button>
-          {tab === "overview" && (
-            <Button className="primary" onClick={openLedger}>
-              <Plus size={14} />
-              新增记录
-            </Button>
-          )}
         </div>
       </div>
       {tab === "overview" ? (

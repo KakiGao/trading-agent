@@ -56,7 +56,8 @@ export default function App() {
   }, []);
   const error = useCallback((text) => message(text, true), [message]);
   const dashboard = useDashboard(message);
-  const { state, online, save, run, cancel, mutate, refresh } = dashboard;
+  const { state, online, save, run, cancel, removeJob, mutate, refresh } =
+    dashboard;
   const baseline = useRef(false);
   useEffect(() => {
     if (!state) return;
@@ -495,6 +496,23 @@ export default function App() {
                                   }
                                 >
                                   取消
+                                </button>
+                              )}
+                              {(j.status === "failed" ||
+                                j.status === "interrupted") && (
+                                <button
+                                  className="cancel-button"
+                                  disabled={busy === `delete-${j.id}`}
+                                  onClick={() =>
+                                    act(async () => {
+                                      await removeJob(j.id);
+                                      if (pinned === j.id || selection === j.ticker) {
+                                        setPinned(null);
+                                      }
+                                    }, `delete-${j.id}`)
+                                  }
+                                >
+                                  删除
                                 </button>
                               )}
                             </div>

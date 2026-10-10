@@ -129,7 +129,7 @@ class Engine:
 
     def run(self, job):
         folder = self.store.folder / "runs" / job["id"]
-        folder.mkdir(parents=True, mode=0o700)
+        folder.mkdir(parents=True, exist_ok=True, mode=0o700)
         settings = Settings.model_validate_json(job["settings"])
         request = {"ticker": job["ticker"], "trade_date": job["trade_date"], "settings": settings.model_dump()}
         (folder / "request.json").write_text(json.dumps(request), encoding="utf-8")
@@ -225,8 +225,7 @@ def create_app(folder=DATA, background=True):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Cache-Control"] = "no-store"
-        if not request.url.path.startswith("/api/report/"):
-            response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://assets.parqet.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://assets.parqet.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
         return response
 
     @app.get("/api/state")
@@ -311,6 +310,15 @@ def create_app(folder=DATA, background=True):
             store.update(jid, status="cancelled", stage="已取消")
         return {"ok": True}
 
+    @app.post("/api/job/{jid}/delete")
+    def delete_job(jid: str):
+        try:
+            if not store.remove(jid):
+                raise HTTPException(404, "记录不存在")
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+        return {"ok": True}
+
     @app.get("/api/job/{jid}")
     def job_detail(jid: str):
         job = store.job(jid)
@@ -318,18 +326,24 @@ def create_app(folder=DATA, background=True):
             raise HTTPException(404, "记录不存在")
         job["result"] = json.loads(job["result"]) if job["result"] else None
         job["settings"] = json.loads(job["settings"])
-        job["has_report"] = (store.folder / "runs" / job["id"] / "report/complete_report.html").exists()
         return job
 
-    @app.get("/api/report/{jid}")
-    def report(jid: str):
+    @app.get("/api/job/{jid}/live")
+    def job_live(jid: str):
         job = store.job(jid)
         if not job:
-            raise HTTPException(404)
-        path = store.folder / "runs" / job["id"] / "report/complete_report.html"
-        if not path.exists():
-            raise HTTPException(404, "尚未生成报告")
-        return FileResponse(path, media_type="text/html", headers={"Content-Security-Policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:"})
+            raise HTTPException(404, "记录不存在")
+        path = store.folder / "runs" / jid / "events.jsonl"
+        events = []
+        if path.exists():
+            # ponytail: last 120 lines only; transcript is ephemeral viewing aid
+            lines = path.read_text(encoding="utf-8").splitlines()[-120:]
+            for line in lines:
+                try:
+                    events.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        return {"status": job["status"], "stage": job["stage"], "events": events}
 
     @app.get("/api/memory")
     def memory():

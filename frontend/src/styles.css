@@ -201,7 +201,7 @@ label > select {
 .nav-links {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 12px;
   flex: 1;
   min-height: 0;
 }
@@ -328,7 +328,7 @@ label > select {
   justify-content: center;
   gap: 9px;
   padding: 10px 17px;
-  border-radius: 4px;
+  border-radius: 999px;
   border: 1px solid var(--line);
   background: #fff;
   color: #3c4043;
@@ -1099,6 +1099,80 @@ label > select {
   width: 15px;
   height: 1px;
   background: #dbd3ce;
+}
+.workflow span.active {
+  color: var(--blue);
+  font-weight: 500;
+}
+.progress-live {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  padding: 8px 22px 22px;
+}
+.progress-live-head {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  color: var(--blue);
+}
+.progress-live-head h3 {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--ink);
+  margin-top: 2px;
+}
+.progress-live-head p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+  margin-top: 6px;
+  max-width: 420px;
+}
+.progress-live .workflow {
+  margin-top: 0;
+}
+.live-log {
+  flex: 1;
+  min-height: 220px;
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f8f9fa;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.live-empty {
+  color: var(--muted);
+  font-size: 13px;
+  margin: auto;
+}
+.live-stage {
+  align-self: flex-start;
+  background: var(--blue-soft);
+  color: #1967d2;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.live-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: Roboto, ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #3c4043;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
 }
 .activity-card {
   margin-top: 23px;
@@ -2427,7 +2501,7 @@ footer small {
   background: #fff;
   border-color: var(--line);
   box-shadow: 0 1px 2px #3c404314, 0 1px 3px 1px #3c40430a;
-  border-radius: 8px;
+  border-radius: 24px;
 }
 .metrics > div > span {
   color: var(--muted);
@@ -2508,7 +2582,7 @@ footer small {
 }
 .button {
   border-color: var(--line);
-  border-radius: 4px;
+  border-radius: 999px;
 }
 .add-form,
 .list-search input {
@@ -2599,7 +2673,7 @@ select {
   background: #fff;
   border-color: var(--line);
   color: var(--ink);
-  border-radius: 4px;
+  border-radius: 12px;
 }
 input::placeholder {
   color: #9aa0a6;
@@ -2666,7 +2740,7 @@ label {
   background: #f1f3f4;
 }
 .portfolio-tabs button {
-  border-radius: 6px;
+  border-radius: 999px;
   padding: 8px 16px;
   font-size: 13px;
   color: #3c4043;
@@ -2940,7 +3014,7 @@ label {
   background: #fff;
   border: 1px solid var(--line);
   box-shadow: 0 8px 28px #3c404340;
-  border-radius: 8px;
+  border-radius: 24px;
   padding: 32px;
   width: 470px;
   max-width: 100%;
@@ -3003,7 +3077,7 @@ label {
   gap: 11px;
   padding: 23px 18px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 20px;
   cursor: pointer;
   color: var(--muted);
 }
@@ -3093,12 +3167,12 @@ label {
     0 0 0 11px #d2e3fc;
 }
 .card {
-  border-radius: 8px;
+  border-radius: 24px;
 }
 .toast {
   background: #202124;
   color: #fff;
-  border-radius: 4px;
+  border-radius: 999px;
 }
 .toast.error {
   background: var(--red);

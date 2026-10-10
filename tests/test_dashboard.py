@@ -170,10 +170,8 @@ def test_worker_result_becomes_report_and_inbox(client, monkeypatch):
     client.app.state.engine.run(store.claim())
     job = client.get("/api/job/" + jid).json()
     assert job["status"] == "completed" and job["rating"] == "Buy"
-    assert job["has_report"] is True
-    response = client.get("/api/report/" + jid)
-    assert response.status_code == 200
-    assert "sandbox" in response.headers["content-security-policy"]
+    assert job["result"]["reports"]["final_trade_decision"] == "买入研究依据"
+    assert client.get("/api/report/" + jid).status_code == 404
     state = client.get("/api/state").json()
     assert len(state["notifications"]) == 1
     assert state["notifications"][0]["seen"] == 0
@@ -191,6 +189,30 @@ def test_worker_failure_becomes_actionable_message(client, monkeypatch):
     assert store.jobs()[0]["status"] == "failed"
     assert "test network failure" in store.jobs()[0]["error"]
     assert len(store.notifications()) == 1
+
+
+def test_delete_incomplete_job_and_live_transcript(client, monkeypatch):
+    store = client.app.state.store
+    jid = client.post("/api/run", json={"ticker": "AMD"}).json()["ids"][0]
+    run = store.folder / "runs" / jid
+    run.mkdir(parents=True)
+    (run / "events.jsonl").write_text(
+        '{"type":"stage","stage":"Market Analyst","at":1}\n'
+        '{"type":"text","stage":"Market Analyst","text":"趋势观察","at":2}\n',
+        encoding="utf-8",
+    )
+    live = client.get(f"/api/job/{jid}/live").json()
+    assert live["events"][0]["stage"] == "Market Analyst"
+    assert live["events"][1]["text"] == "趋势观察"
+    assert client.post(f"/api/job/{jid}/delete").status_code == 400
+    def fail(*a, **kw):
+        raise OSError("boom")
+    monkeypatch.setattr(server.subprocess, "Popen", fail)
+    client.app.state.engine.run(store.claim())
+    assert store.jobs()[0]["status"] == "failed"
+    assert client.post(f"/api/job/{jid}/delete").status_code == 200
+    assert store.jobs() == []
+    assert client.get(f"/api/job/{jid}").status_code == 404
 
 
 def test_memory_reads_original_log(client, monkeypatch, tmp_path):
