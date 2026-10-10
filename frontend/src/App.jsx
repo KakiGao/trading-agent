@@ -19,14 +19,17 @@ import {
   Layers3,
 } from "lucide-react";
 import useDashboard from "./useDashboard.js";
-import { Button, Badge, Status, Empty, ResultPanel } from "./components.jsx";
 import {
-  Portfolio,
-  Schedule,
-  Memory,
-  Notifications,
-  Preferences,
-} from "./views.jsx";
+  Button,
+  Badge,
+  Status,
+  Empty,
+  ResultPanel,
+  TickerAvatar,
+} from "./components.jsx";
+import { Schedule, Memory, Notifications, Preferences } from "./views.jsx";
+import Portfolio from "./Portfolio.jsx";
+import ModelConfiguration from "./ModelConfiguration.jsx";
 import { dateLabel, tickerList, isActive, stages, request } from "./data.js";
 
 const navigation = [
@@ -34,6 +37,7 @@ const navigation = [
   ["portfolio", "我的持仓", Wallet],
   ["memory", "决策记忆", BrainCircuit],
   ["schedule", "自动运行", Clock3],
+  ["models", "模型配置", Settings2],
 ];
 
 export default function App() {
@@ -145,111 +149,65 @@ export default function App() {
     );
   return (
     <div className="app-shell">
-      <header className="hero">
-        <nav className="top-nav" aria-label="主导航">
-          <button
-            className="brand"
-            onClick={() => setView("overview")}
-            aria-label="TradingAgents 首页"
-          >
-            <span className="brand-symbol">
-              A<span />
-            </span>
-            <span>
-              TradingAgents<small>YOUR RESEARCH, IN PERSPECTIVE</small>
-            </span>
-          </button>
-          <div className="nav-links">
-            {navigation.map(([id, label, Icon]) => (
-              <button
-                key={id}
-                className={view === id ? "active" : ""}
-                onClick={() => setView(id)}
-              >
-                <Icon size={15} />
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="nav-actions">
+      <aside className="side-nav">
+        <button
+          className="brand"
+          onClick={() => setView("overview")}
+          aria-label="TradingAgents 首页"
+        >
+          <span className="brand-symbol">
+            A<span />
+          </span>
+          <span>
+            TradingAgents<small>YOUR RESEARCH, IN PERSPECTIVE</small>
+          </span>
+        </button>
+        <nav className="nav-links" aria-label="主导航">
+          {navigation.map(([id, label, Icon]) => (
             <button
-              className={`nav-icon ${view === "notifications" ? "active" : ""}`}
-              aria-label={`消息中心，${unread} 条未读`}
-              onClick={() => setView("notifications")}
+              key={id}
+              className={view === id ? "active" : ""}
+              onClick={() => setView(id)}
             >
-              <Bell size={18} />
-              {unread > 0 && <span className="notification-dot" />}
+              <Icon size={15} />
+              {label}
             </button>
-            <button
-              className={`nav-icon ${view === "settings" ? "active" : ""}`}
-              aria-label="模型与偏好"
-              onClick={() => setView("settings")}
-            >
-              <Settings2 size={18} />
-            </button>
-            <span className="avatar">K</span>
-          </div>
+          ))}
         </nav>
-        <div className="hero-content">
-          <div>
-            <div className="hero-eyebrow">
-              <i />
-              {online ? "本地研究服务在线" : "服务连接中断"}
-            </div>
-            <h1>
-              看见机会，
-              <br className="mobile-break" />
-              也看清依据。
-            </h1>
-            <p>你的 AI 研究团队，与你一起作出更有依据的判断。</p>
-            <div className="hero-buttons">
-              <Button
-                className="light"
-                busy={busy === "all"}
-                onClick={() =>
-                  act(async () => {
-                    await run();
-                    setView("overview");
-                  }, "all")
-                }
-                disabled={!tickers.length}
-              >
-                <Plus size={15} />
-                分析全部关注
-              </Button>
-              <button className="hero-link" onClick={() => setView("schedule")}>
-                管理运行计划 <ArrowUpRight size={15} />
-              </button>
-            </div>
-          </div>
-          <div className="research-pass">
-            <div>
-              <span>RESEARCH DESK</span>
-              <Layers3 size={21} strokeWidth={1} />
-            </div>
-            <p>独立观点 · 多维研究</p>
-            <strong>
-              {String(tickers.length).padStart(2, "0")}
-              <small>个关注标的</small>
-            </strong>
-            <div className="pass-bottom">
-              <span>
-                {state.key_configured ? "DeepSeek 已配置" : "等待模型配置"}
-              </span>
-              <span>LOCAL / 01</span>
-            </div>
-          </div>
+        <div className="nav-actions">
+          <button
+            className={`nav-icon ${view === "notifications" ? "active" : ""}`}
+            aria-label={`消息中心，${unread} 条未读`}
+            onClick={() => setView("notifications")}
+          >
+            <Bell size={18} />
+            {unread > 0 && <span className="notification-dot" />}
+          </button>
+          <button
+            className={`nav-icon ${view === "settings" ? "active" : ""}`}
+            aria-label="研究偏好"
+            onClick={() => setView("settings")}
+          >
+            <Settings2 size={18} />
+          </button>
+          <span className="avatar">K</span>
         </div>
-      </header>
+      </aside>
+      <div className="main-column">
       <main className="workspace">
         <div className="workspace-toolbar">
-          <div>
-            <span>工作台</span>
-            <ChevronRight size={12} />
-            <strong>
-              {navigation.find(([id]) => id === view)?.[1] ||
-                { notifications: "消息中心", settings: "模型与偏好" }[view]}
-            </strong>
+          <div className="toolbar-actions">
+            {view === "overview" && (
+              <Button
+                className="primary"
+                busy={busy === "all"}
+                disabled={!tickers.length}
+                onClick={() => act(() => run(), "all")}
+              >
+                <Plus size={14} />
+                分析全部关注
+              </Button>
+            )}
           </div>
           <span>
             <i className={online ? "online-dot" : "offline-dot"} />
@@ -261,8 +219,8 @@ export default function App() {
         {!state.key_configured && (
           <div className="setup-banner">
             <CircleAlert size={17} />
-            <span>配置 DeepSeek 密钥，让研究团队开始工作。</span>
-            <button onClick={() => setView("settings")}>
+            <span>请在模型配置中填写当前服务的密钥。</span>
+            <button onClick={() => setView("models")}>
               前往配置 <ArrowRight size={14} />
             </button>
           </div>
@@ -391,9 +349,10 @@ export default function App() {
                             onClick={() => select(t)}
                             aria-label={`查看 ${t} 分析结果`}
                           >
-                            <span className={`ticker-avatar tone-${index % 4}`}>
-                              {t.slice(0, 2)}
-                            </span>
+                            <TickerAvatar
+                              ticker={t}
+                              tone={`tone-${index % 4}`}
+                            />
                             <span>
                               <strong>{t}</strong>
                               <small>
@@ -554,7 +513,15 @@ export default function App() {
           </>
         )}
         {view === "portfolio" && (
-          <Portfolio settings={state.settings} save={save} error={error} />
+          <Portfolio
+            settings={state.settings}
+            save={save}
+            mutate={mutate}
+            refresh={refresh}
+            message={message}
+            error={error}
+            storage={state.storage}
+          />
         )}
         {view === "schedule" && (
           <Schedule
@@ -579,6 +546,18 @@ export default function App() {
             error={error}
           />
         )}
+        {view === "models" && (
+          <ModelConfiguration
+            settings={state.settings}
+            providerKeys={state.provider_keys}
+            providerKeyMasks={state.provider_key_masks}
+            save={save}
+            mutate={mutate}
+            refresh={refresh}
+            message={message}
+            error={error}
+          />
+        )}
         {view === "settings" && (
           <Preferences
             settings={state.settings}
@@ -596,6 +575,7 @@ export default function App() {
           <small>AI 研究建议需自行复核 · 本机存储 · 不执行交易</small>
         </footer>
       </main>
+      </div>
       {toast && (
         <div
           className={`toast ${toast.error ? "error" : ""}`}

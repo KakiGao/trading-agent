@@ -14,6 +14,7 @@ from tradingagents.default_config import build_default_config
 from tradingagents.dataflows.symbols import crypto_base
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.portfolio import PortfolioContext
+from dashboard.models import worker_config
 
 
 def atomic_json(path, value):
@@ -57,6 +58,7 @@ def main(folder):
         if not analysts:
             analysts = ["market"]
     try:
+        cfg = worker_config(cfg, settings.get("models", {}))
         graph = TradingAgentsGraph(selected_analysts=analysts, config=cfg, callbacks=[Progress(folder / "progress.json")])
         state, rating = graph.propagate(request["ticker"], request["trade_date"], asset_type=kind, portfolio=portfolio)
         fields = ("market_report", "sentiment_report", "news_report", "fundamentals_report", "investment_plan", "trader_investment_plan", "final_trade_decision", "memory_note")

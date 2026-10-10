@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from tradingagents.dataflows.symbols import normalize_symbol
+from dashboard.models import ModelSettings
 
 TZ = ZoneInfo("Asia/Shanghai")
 RATINGS = {"Buy": "买入", "Overweight": "加仓", "Hold": "持有", "Underweight": "减仓", "Sell": "卖出", "REVIEW": "待复核"}
@@ -57,6 +58,7 @@ class Book(BaseModel):
 
 
 class Settings(BaseModel):
+    models: ModelSettings = Field(default_factory=ModelSettings)
     watchlist: list[str] = Field(default_factory=list, max_length=50)
     portfolio: Book = Field(default_factory=Book)
     analysts: list[str] = Field(default_factory=lambda: ["market", "news", "fundamentals", "social"])
@@ -129,6 +131,15 @@ class Store:
         self.folder.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.db = self.folder / "dashboard.db"
         self.lock = threading.RLock()
+        # Preserve an on-disk copy before the first ledger schema migration.
+        if self.db.exists():
+            with self.connect() as source:
+                if not source.execute("SELECT 1 FROM sqlite_master WHERE name='ledger_meta'").fetchone():
+                    backup = self.folder / "before-ledger-migration.db"
+                    if not backup.exists():
+                        with sqlite3.connect(backup) as target:
+                            source.backup(target)
+                        backup.chmod(0o600)
         with self.connect() as conn:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS config (id INTEGER PRIMARY KEY, body TEXT, next_due TEXT);
@@ -141,6 +152,8 @@ class Store:
                   job_id TEXT, created TEXT, seen INTEGER DEFAULT 0);
             """)
             conn.execute("INSERT OR IGNORE INTO config VALUES (1, ?, NULL)", (Settings().model_dump_json(),))
+            from dashboard.ledger import initialize
+            initialize(conn)
         self.db.chmod(0o600)
 
     def connect(self):
@@ -156,6 +169,12 @@ class Store:
     def save(self, settings):
         with self.lock, self.connect() as conn:
             previous, due = self.config()
+            if settings.portfolio.currency != previous.portfolio.currency and conn.execute("SELECT 1 FROM ledger_entries WHERE deleted_at IS NULL LIMIT 1").fetchone():
+                raise ValueError("已有交易日志时不能更换账户币种；请先撤回全部记录")
+            # Cash and positions are derived exclusively from the ledger. A stale
+            # browser settings save must never overwrite a newer transaction.
+            settings.portfolio.cash = previous.portfolio.cash
+            settings.portfolio.positions = previous.portfolio.positions
             fields = ("schedule_enabled", "schedule_mode", "daily_time", "interval_minutes", "weekdays_only")
             if any(getattr(settings, k) != getattr(previous, k) for k in fields):
                 nxt = next_due(settings, now())

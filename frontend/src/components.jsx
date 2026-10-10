@@ -72,6 +72,28 @@ export function Empty({ title, children, icon: Icon = FileText }) {
     </div>
   );
 }
+// ponytail: Parqet CDN (brand-colored marks); letter badge if missing
+export function TickerAvatar({ ticker, className = "", tone = "" }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) {
+    return (
+      <span className={`ticker-avatar ${tone} ${className}`.trim()}>
+        {ticker.slice(0, 2)}
+      </span>
+    );
+  }
+  return (
+    <span className={`ticker-avatar has-logo ${className}`.trim()}>
+      <img
+        src={`https://assets.parqet.com/logos/symbol/${encodeURIComponent(ticker)}`}
+        alt=""
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setBroken(true)}
+      />
+    </span>
+  );
+}
 export function Markdown({ children }) {
   return (
     <div className="markdown">
@@ -91,17 +113,8 @@ export function Markdown({ children }) {
     </div>
   );
 }
-export function PageHeading({ eyebrow, title, children, action }) {
-  return (
-    <div className="page-heading">
-      <div>
-        <span className="eyebrow">{eyebrow}</span>
-        <h1>{title}</h1>
-        <p>{children}</p>
-      </div>
-      {action}
-    </div>
-  );
+export function PageHeading({ action }) {
+  return action ? <div className="page-actions">{action}</div> : null;
 }
 export function SubmitForm({ onSubmit, onError, children, className = "" }) {
   const [busy, setBusy] = useState(false);
@@ -190,7 +203,7 @@ export function ResultPanel({ job, ticker, allJobs = [], onPick, onDismiss }) {
       ) : (
         <>
           <div className="result-identity">
-            <div className="ticker-avatar large">{ticker.slice(0, 2)}</div>
+            <TickerAvatar ticker={ticker} className="large" />
             <div>
               <h3>{ticker}</h3>
               <p>

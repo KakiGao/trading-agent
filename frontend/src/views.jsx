@@ -19,159 +19,9 @@ import {
   SubmitForm,
   PageHeading,
   NotificationPermission,
+  TickerAvatar,
 } from "./components.jsx";
 import { analystOptions, dateLabel, request } from "./data.js";
-
-export function Portfolio({ settings, save, error }) {
-  const [book, setBook] = useState(() => structuredClone(settings.portfolio));
-  const update = (key, value) => setBook((prev) => ({ ...prev, [key]: value }));
-  const updatePosition = (index, key, value) =>
-    setBook((prev) => ({
-      ...prev,
-      positions: prev.positions.map((p, i) =>
-        i === index ? { ...p, [key]: value } : p,
-      ),
-    }));
-  return (
-    <>
-      <PageHeading eyebrow="YOUR PORTFOLIO" title="让每份建议，都与你有关。">
-        管理持仓、成本与现金，让研究团队理解你的账户。
-      </PageHeading>
-      <section className="card form-card">
-        <SubmitForm onSubmit={() => save({ portfolio: book })} onError={error}>
-          <div className="card-heading">
-            <h2>我的账户</h2>
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={book.enabled}
-                onChange={(e) => update("enabled", e.target.checked)}
-              />
-              <span>分析时使用持仓</span>
-            </label>
-          </div>
-          <div className="form-grid">
-            <label>
-              可用现金
-              <input
-                type="number"
-                min="0"
-                step="any"
-                value={book.cash}
-                required
-                onChange={(e) =>
-                  update(
-                    "cash",
-                    e.target.value === "" ? "" : Number(e.target.value),
-                  )
-                }
-              />
-            </label>
-            <label>
-              账户币种
-              <select
-                value={book.currency}
-                onChange={(e) => update("currency", e.target.value)}
-              >
-                {["USD", "HKD", "CNY", "JPY", "EUR", "GBP"].map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <p className="hint">
-            按同一报价币种维护账户，当前不做汇率换算。持仓启用且列表为空，表示空仓。
-          </p>
-          <div className="position-labels">
-            <span>股票代码</span>
-            <span>持有数量</span>
-            <span>平均成本</span>
-            <span />
-          </div>
-          {book.positions.map((p, i) => (
-            <div className="position-row" key={i}>
-              <input
-                aria-label={`股票代码 ${i + 1}`}
-                value={p.ticker}
-                placeholder="NVDA"
-                maxLength={24}
-                required
-                onChange={(e) => updatePosition(i, "ticker", e.target.value)}
-              />
-              <input
-                aria-label={`持有数量 ${i + 1}`}
-                type="number"
-                min="0.00000001"
-                step="any"
-                required
-                value={p.quantity}
-                onChange={(e) =>
-                  updatePosition(
-                    i,
-                    "quantity",
-                    e.target.value === "" ? "" : Number(e.target.value),
-                  )
-                }
-              />
-              <input
-                aria-label={`平均成本 ${i + 1}`}
-                type="number"
-                min="0"
-                step="any"
-                required
-                value={p.average_price}
-                onChange={(e) =>
-                  updatePosition(
-                    i,
-                    "average_price",
-                    e.target.value === "" ? "" : Number(e.target.value),
-                  )
-                }
-              />
-              <button
-                type="button"
-                className="icon-button"
-                aria-label={`删除持仓 ${p.ticker || i + 1}`}
-                onClick={() =>
-                  update(
-                    "positions",
-                    book.positions.filter((_, n) => n !== i),
-                  )
-                }
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          ))}
-          {!book.positions.length && (
-            <div className="form-empty">
-              还没有持仓。添加后，下一次分析会使用保存的账户信息。
-            </div>
-          )}
-          <Button
-            type="button"
-            className="subtle"
-            onClick={() =>
-              update("positions", [
-                ...book.positions,
-                { ticker: "", quantity: "", average_price: "" },
-              ])
-            }
-          >
-            <Plus size={14} />
-            添加持仓
-          </Button>
-          <div className="form-footer">
-            <p>交易后请手动更新。研究时持仓会发送给所配置的模型服务。</p>
-            <Button type="submit" className="primary">
-              保存持仓 <ArrowUpRight size={15} />
-            </Button>
-          </div>
-        </SubmitForm>
-      </section>
-    </>
-  );
-}
 
 export function Schedule({ settings, nextDue, save, error }) {
   const [form, setForm] = useState(() => ({ ...settings }));
@@ -378,7 +228,7 @@ export function Memory({ error }) {
             className="card memory-entry"
           >
             <summary>
-              <div className="ticker-avatar">{e.ticker.slice(0, 2)}</div>
+              <TickerAvatar ticker={e.ticker} />
               <strong>{e.ticker}</strong>
               <Badge rating={e.rating} />
               <span className="memory-status">
@@ -454,110 +304,43 @@ export function Notifications({ items, onRead, onOpen, error }) {
   );
 }
 
-export function Preferences({
-  settings,
-  keyConfigured,
-  save,
-  mutate,
-  refresh,
-  message,
-  error,
-}) {
-  const [key, setKey] = useState(""),
-    [analysts, setAnalysts] = useState(settings.analysts);
+export function Preferences({ settings, save, error }) {
+  const [analysts, setAnalysts] = useState(settings.analysts);
   return (
-    <>
-      <PageHeading
-        eyebrow="RESEARCH PREFERENCES"
-        title="配置你的专属研究团队。"
-      >
-        沿用 DeepSeek 与中文输出，密钥只保存在本机。
-      </PageHeading>
-      <div className="settings-columns">
-        <section className="card form-card">
-          <div className="card-heading">
-            <h2>模型连接</h2>
-            <span className={`badge ${keyConfigured ? "positive" : "neutral"}`}>
-              {keyConfigured ? "密钥已配置" : "待配置"}
-            </span>
-          </div>
-          <div className="model-cards">
-            <div>
-              <CircleDot size={19} />
-              <span>资料分析与讨论</span>
-              <strong>DeepSeek Flash</strong>
-            </div>
-            <div>
-              <CircleDot size={19} />
-              <span>研究经理与组合经理</span>
-              <strong>DeepSeek V4 Pro</strong>
-            </div>
-          </div>
-          <SubmitForm
-            onError={error}
-            onSubmit={async () => {
-              await mutate("key", { key });
-              setKey("");
-              await refresh();
-              message("密钥已保存");
-            }}
-          >
-            <label>
-              DeepSeek API Key
-              <input
-                type="password"
-                autoComplete="new-password"
-                placeholder="填写或替换密钥"
-                minLength={8}
-                required
-                value={key}
-                onChange={(e) => setKey(e.target.value)}
-              />
-            </label>
-            <p className="hint">
-              保存后不显示密钥。真实分析使用模型额度，保存不代表已验证余额。
-            </p>
-            <Button type="submit" className="primary">
-              保存密钥
-            </Button>
-          </SubmitForm>
-        </section>
-        <section className="card form-card">
-          <div className="card-heading">
-            <h2>参与分析的团队</h2>
-            <BrainCircuit size={18} />
-          </div>
-          <SubmitForm onError={error} onSubmit={() => save({ analysts })}>
-            <div className="analyst-options">
-              {analystOptions.map(([id, title, desc]) => (
-                <label key={id}>
-                  <input
-                    type="checkbox"
-                    checked={analysts.includes(id)}
-                    onChange={(e) =>
-                      setAnalysts(
-                        e.target.checked
-                          ? [...analysts, id]
-                          : analysts.filter((a) => a !== id),
-                      )
-                    }
-                  />
-                  <span>
-                    <strong>{title}</strong>
-                    <small>{desc}</small>
-                  </span>
-                </label>
-              ))}
-            </div>
-            <p className="hint">
-              至少选择一位分析师。研究结论仍会经过多空辩论和风险评估。
-            </p>
-            <Button type="submit" className="primary">
-              保存分析团队
-            </Button>
-          </SubmitForm>
-        </section>
+    <section className="card form-card preferences-card">
+      <div className="card-heading">
+        <h2>参与分析的团队</h2>
+        <BrainCircuit size={18} />
       </div>
-    </>
+      <SubmitForm onError={error} onSubmit={() => save({ analysts })}>
+        <div className="analyst-options">
+          {analystOptions.map(([id, title, desc]) => (
+            <label key={id}>
+              <input
+                type="checkbox"
+                checked={analysts.includes(id)}
+                onChange={(e) =>
+                  setAnalysts(
+                    e.target.checked
+                      ? [...analysts, id]
+                      : analysts.filter((a) => a !== id),
+                  )
+                }
+              />
+              <span>
+                <strong>{title}</strong>
+                <small>{desc}</small>
+              </span>
+            </label>
+          ))}
+        </div>
+        <p className="hint">
+          至少选择一位分析师。研究结论会经过多空辩论和风险评估。
+        </p>
+        <Button type="submit" className="primary">
+          保存分析团队
+        </Button>
+      </SubmitForm>
+    </section>
   );
 }

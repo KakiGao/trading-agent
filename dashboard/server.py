@@ -9,6 +9,8 @@ import subprocess
 import sys
 import threading
 import time
+import sqlite3
+import tempfile
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from pathlib import Path
@@ -16,11 +18,14 @@ from pathlib import Path
 from dotenv import dotenv_values, set_key
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from dashboard.core import RATINGS, Settings, Store, TZ, next_due, now, should_notify, symbol
+from dashboard.ledger import Entry, mutate as mutate_ledger, snapshot as ledger_snapshot
+from dashboard.models import KEY_NAMES
+from typing import Literal
 from tradingagents.default_config import build_default_config
 from tradingagents.memory import TradingMemoryLog
 
@@ -29,8 +34,23 @@ STATIC = Path(__file__).parent / "static"
 DATA = Path(os.getenv("TRADINGAGENTS_DASHBOARD_DIR", Path.home() / ".tradingagents/dashboard"))
 
 
-def key_present():
-    return bool(dotenv_values(ROOT / ".env").get("DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_API_KEY"))
+def key_value(provider="deepseek"):
+    name = KEY_NAMES[provider]
+    raw = (dotenv_values(ROOT / ".env").get(name) or os.getenv(name) or "").strip()
+    return raw.removeprefix("Bearer ").strip()
+
+
+def key_present(provider="deepseek"):
+    return bool(key_value(provider))
+
+
+def key_mask(provider="deepseek"):
+    # ponytail: show prefix+suffix only; full key stays on disk
+    raw = key_value(provider)
+    if len(raw) < 8:
+        return None
+    keep = 4
+    return f"{raw[:keep]}{'•' * max(6, len(raw) - 2 * keep)}{raw[-keep:]}"
 
 
 class RunRequest(BaseModel):
@@ -39,6 +59,7 @@ class RunRequest(BaseModel):
 
 
 class KeyRequest(BaseModel):
+    provider: Literal["deepseek", "fluxport"] = "deepseek"
     key: str = Field(min_length=8, max_length=512)
 
 
@@ -84,8 +105,8 @@ class Engine:
                 conn.execute("UPDATE config SET next_due=? WHERE id=1", (nxt.isoformat() if nxt else None,))
             if settings.weekdays_only and at.astimezone(TZ).weekday() >= 5:
                 return
-            if not key_present():
-                self.store.notice("自动分析未运行", "请在设置中配置 DeepSeek API Key。")
+            if not key_present(settings.models.provider):
+                self.store.notice("自动分析未运行", "请在模型配置中填写当前服务的 API Key。")
                 return
             tickers = list(dict.fromkeys(settings.watchlist + ([p.ticker for p in settings.portfolio.positions] if settings.portfolio.enabled else [])))
             if tickers:
@@ -205,37 +226,41 @@ def create_app(folder=DATA, background=True):
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Cache-Control"] = "no-store"
         if not request.url.path.startswith("/api/report/"):
-            response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+            response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://assets.parqet.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
         return response
 
     @app.get("/api/state")
     def state():
         settings, due = store.config()
-        return {"csrf": token, "settings": settings.model_dump(), "next_due": due, "jobs": store.jobs(), "notifications": store.notifications(), "key_configured": key_present(), "today": now().date().isoformat(), "version": "0.6.0", "timezone": "Asia/Shanghai"}
+        return {"csrf": token, "settings": settings.model_dump(), "next_due": due, "jobs": store.jobs(), "notifications": store.notifications(), "key_configured": key_present(settings.models.provider), "provider_keys": {p: key_present(p) for p in KEY_NAMES}, "provider_key_masks": {p: key_mask(p) for p in KEY_NAMES}, "storage": {"database": str(store.db), "persistent": True}, "today": now().date().isoformat(), "version": "0.6.0", "timezone": "Asia/Shanghai"}
 
     @app.post("/api/settings")
     def save_settings(settings: Settings):
         if settings.schedule_enabled and not (settings.watchlist or (settings.portfolio.enabled and settings.portfolio.positions)):
             raise HTTPException(400, "请先添加自选股或启用有持仓的账户")
-        if settings.schedule_enabled and not key_present():
-            raise HTTPException(400, "请先配置 DeepSeek API Key，再开启自动运行")
-        store.save(settings)
+        if settings.schedule_enabled and not key_present(settings.models.provider):
+            raise HTTPException(400, "请先配置当前模型服务的 API Key，再开启自动运行")
+        try:
+            store.save(settings)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
         return {"ok": True}
 
     @app.post("/api/key")
     def save_key(payload: KeyRequest):
-        key = payload.key.strip()
-        if any(ch.isspace() for ch in key) or "'" in key or '"' in key:
+        key = payload.key.strip().removeprefix("Bearer ").strip()
+        if len(key) < 8 or any(ch.isspace() for ch in key) or "'" in key or '"' in key:
             raise HTTPException(400, "密钥不能包含空白或引号")
-        set_key(str(ROOT / ".env"), "DEEPSEEK_API_KEY", key)
-        (ROOT / ".env").chmod(0o600)
+        with store.lock:
+            set_key(str(ROOT / ".env"), KEY_NAMES[payload.provider], key)
+            (ROOT / ".env").chmod(0o600)
         return {"ok": True}
 
     @app.post("/api/run")
     def run(payload: RunRequest):
-        if not key_present():
-            raise HTTPException(400, "请先在设置中填写 DeepSeek API Key")
         settings, _ = store.config()
+        if not key_present(settings.models.provider):
+            raise HTTPException(400, "请先在模型配置中填写当前服务的 API Key")
         try:
             tickers = [symbol(payload.ticker)] if payload.ticker else list(dict.fromkeys(settings.watchlist + ([p.ticker for p in settings.portfolio.positions] if settings.portfolio.enabled else [])))
             run_date = date.fromisoformat(payload.date) if payload.date else now().date()
@@ -247,6 +272,35 @@ def create_app(folder=DATA, background=True):
             raise HTTPException(400, "请先添加自选股，或输入要分析的股票")
         ids = store.queue(tickers, settings, date=run_date.isoformat())
         return {"ids": ids, "message": f"已加入 {len(ids)} 个分析任务" if ids else "这些股票已在分析队列中"}
+
+    @app.get("/api/portfolio")
+    def portfolio():
+        return ledger_snapshot(store)
+
+    @app.post("/api/portfolio/entries")
+    def add_entry(entry: Entry):
+        try:
+            mutate_ledger(store, entry=entry)
+            return ledger_snapshot(store)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+
+    @app.post("/api/portfolio/entries/{entry_id}/delete")
+    def delete_entry(entry_id: str):
+        try:
+            mutate_ledger(store, delete_id=entry_id)
+            return ledger_snapshot(store)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+
+    @app.get("/api/backup")
+    def backup():
+        # SQLite's backup API produces a consistent snapshot even during writes.
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "dashboard.db"
+            with store.connect() as source, sqlite3.connect(path) as target:
+                source.backup(target)
+            return Response(path.read_bytes(), media_type="application/octet-stream", headers={"Content-Disposition": f'attachment; filename="tradingagents-{now():%Y%m%d-%H%M%S}.db"'})
 
     @app.post("/api/cancel/{jid}")
     def cancel(jid: str):

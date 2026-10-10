@@ -15,7 +15,7 @@ import dashboard.server as server
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setattr(server, "key_present", lambda: True)
+    monkeypatch.setattr(server, "key_present", lambda *args: True)
     with TestClient(create_app(tmp_path, background=False)) as client:
         token = client.get("/api/state").json()["csrf"]
         client.headers["X-Dashboard-Token"] = token
@@ -34,13 +34,16 @@ def test_local_ui_and_api_guard(client):
 
 
 def test_settings_persist_and_snapshot_holdings(client):
-    settings = Settings(watchlist=["700.HK", "0700.HK"], portfolio={"enabled": True, "cash": 3000, "currency": "HKD", "positions": [{"ticker": "0700.HK", "quantity": 100, "average_price": 400}]})
+    settings = Settings(watchlist=["700.HK", "0700.HK"], portfolio={"enabled": True, "currency": "HKD"})
     assert client.post("/api/settings", json=settings.model_dump()).status_code == 200
+    payload = {"kind": "opening", "occurred_at": "2026-10-01T10:00:00+08:00", "ticker": "0700.HK", "quantity": 100, "price": 400}
+    assert client.post("/api/portfolio/entries", json=payload).status_code == 200
     state = client.get("/api/state").json()
     assert state["settings"]["watchlist"] == ["0700.HK"]
     ids = client.post("/api/run", json={}).json()["ids"]
     assert len(ids) == 1
-    settings.portfolio.positions[0].quantity = 200
+    assert client.post("/api/portfolio/entries", json=payload).status_code == 200
+    # Stale settings saves cannot overwrite ledger-derived holdings.
     client.post("/api/settings", json=settings.model_dump())
     job = client.get("/api/job/" + ids[0]).json()
     assert job["settings"]["portfolio"]["positions"][0]["quantity"] == 100
@@ -60,7 +63,7 @@ def test_duplicate_run_cancel_and_requeue(client):
 
 
 def test_missing_key_prevents_paid_tasks(client, monkeypatch):
-    monkeypatch.setattr(server, "key_present", lambda: False)
+    monkeypatch.setattr(server, "key_present", lambda *args: False)
     assert client.post("/api/run", json={"ticker": "NVDA"}).status_code == 400
     settings = Settings(watchlist=["NVDA"], schedule_enabled=True)
     assert client.post("/api/settings", json=settings.model_dump()).status_code == 400
@@ -110,7 +113,7 @@ def test_next_due_weekday_and_interval():
 
 
 def test_due_schedule_catches_up_once_and_persists(tmp_path, monkeypatch):
-    monkeypatch.setattr(server, "key_present", lambda: True)
+    monkeypatch.setattr(server, "key_present", lambda *args: True)
     store = Store(tmp_path)
     settings = Settings(watchlist=["NVDA"], schedule_enabled=True, schedule_mode="interval", weekdays_only=False)
     store.save(settings)
@@ -135,7 +138,7 @@ def test_weekend_skip_and_missing_key_notice(tmp_path, monkeypatch):
     engine = Engine(store)
     engine.schedule(datetime(2026, 10, 10, 12, 0, tzinfo=TZ))
     assert not store.jobs()
-    monkeypatch.setattr(server, "key_present", lambda: False)
+    monkeypatch.setattr(server, "key_present", lambda *args: False)
     engine.schedule(datetime(2026, 10, 12, 18, 0, tzinfo=TZ))
     assert not store.jobs()
     assert len(store.notifications()) == 1
