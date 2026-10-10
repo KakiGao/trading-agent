@@ -180,3 +180,38 @@ def test_fluxport_maps_to_chat_completions_with_tools(monkeypatch):
         assert result.tool_calls[0]['args']=={'ticker':'AMD'}
     with pytest.raises(ValidationError):ModelSettings(fluxport_base_url='https://secret@api.uselg.top/v1')
     with pytest.raises(ValidationError):ModelSettings(fluxport_model='unsupported')
+
+
+def test_grsai_maps_to_gemini_chat_completions(monkeypatch):
+    import httpx
+    from tradingagents.llm_clients.factory import create_tier_client
+    monkeypatch.setenv('GRSAI_LLM_API_KEY', 'Bearer test-grsai-key')
+    monkeypatch.setenv('OPENAI_COMPATIBLE_API_KEY', 'wrong-key')
+    cfg = worker_config(
+        {'llm_provider': 'deepseek', 'quick_think_provider': 'deepseek', 'quick_think_backend_url': 'https://api.deepseek.com'},
+        {'provider': 'grsai'},
+    )
+    assert cfg['quick_think_llm'] == 'gemini-3.1-pro'
+    assert cfg['backend_url'] == 'https://grsaiapi.com/v1'
+
+    def handler(req):
+        assert str(req.url) == 'https://grsaiapi.com/v1/chat/completions'
+        assert req.headers['authorization'] == 'Bearer test-grsai-key'
+        payload = json.loads(req.content)
+        assert payload['model'] == 'gemini-3.1-pro'
+        return httpx.Response(
+            200,
+            json={
+                'id': 'chat-test',
+                'object': 'chat.completion',
+                'created': 0,
+                'model': 'gemini-3.1-pro',
+                'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': 'ok'}, 'finish_reason': 'stop'}],
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    llm = create_tier_client(cfg, 'deep', http_client=client).get_llm()
+    assert llm.invoke('ping').content == 'ok'
+    with pytest.raises(ValidationError):
+        ModelSettings(grsai_model='unsupported')

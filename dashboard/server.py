@@ -36,7 +36,11 @@ DATA = Path(os.getenv("TRADINGAGENTS_DASHBOARD_DIR", Path.home() / ".tradingagen
 
 def key_value(provider="deepseek"):
     name = KEY_NAMES[provider]
-    raw = (dotenv_values(ROOT / ".env").get(name) or os.getenv(name) or "").strip()
+    env = dotenv_values(ROOT / ".env")
+    raw = (env.get(name) or os.getenv(name) or "").strip()
+    # poppic: GrsAI chat often shares GRSAI_API_KEY when LLM-specific env is unset
+    if provider == "grsai" and not raw:
+        raw = (env.get("GRSAI_API_KEY") or os.getenv("GRSAI_API_KEY") or "").strip()
     return raw.removeprefix("Bearer ").strip()
 
 
@@ -59,7 +63,7 @@ class RunRequest(BaseModel):
 
 
 class KeyRequest(BaseModel):
-    provider: Literal["deepseek", "fluxport"] = "deepseek"
+    provider: Literal["deepseek", "fluxport", "grsai"] = "deepseek"
     key: str = Field(min_length=8, max_length=512)
 
 

@@ -176,6 +176,8 @@ it("saves Fluxport credentials separately and applies the chosen model", async (
         provider: "fluxport",
         fluxport_model: "gpt-6-sol",
         fluxport_base_url: "https://api.uselg.top/v1",
+        grsai_model: "gemini-3.1-pro",
+        grsai_base_url: "https://grsaiapi.com/v1",
       },
     }),
   );

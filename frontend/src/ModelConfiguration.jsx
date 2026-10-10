@@ -2,6 +2,24 @@ import { useState } from "react";
 import { Cpu, KeyRound, Check, ShieldCheck } from "lucide-react";
 import { Button, SubmitForm } from "./components.jsx";
 
+const providers = [
+  ["deepseek", "DeepSeek", "Flash + V4 Pro"],
+  ["fluxport", "Fluxport", "gpt-6-sol"],
+  ["grsai", "GrsAI", "gemini-3.1-pro"],
+];
+
+const labels = {
+  deepseek: "DeepSeek",
+  fluxport: "Fluxport · gpt-6-sol",
+  grsai: "GrsAI · gemini-3.1-pro",
+};
+
+const keyLabels = {
+  deepseek: "DeepSeek",
+  fluxport: "Fluxport LLM",
+  grsai: "GrsAI LLM",
+};
+
 export default function ModelConfiguration({
   settings,
   providerKeys,
@@ -16,6 +34,8 @@ export default function ModelConfiguration({
     provider: "deepseek",
     fluxport_model: "gpt-6-sol",
     fluxport_base_url: "https://api.uselg.top/v1",
+    grsai_model: "gemini-3.1-pro",
+    grsai_base_url: "https://grsaiapi.com/v1",
   };
   const [form, setForm] = useState({ ...defaults, ...settings.models }),
     [key, setKey] = useState(""),
@@ -39,10 +59,7 @@ export default function ModelConfiguration({
       <section className="card form-card">
         <div className="card-heading">
           <h2>模型配置</h2>
-          <span className="badge">
-            当前使用{" "}
-            {active === "fluxport" ? "Fluxport · gpt-6-sol" : "DeepSeek"}
-          </span>
+          <span className="badge">当前使用 {labels[active] || "DeepSeek"}</span>
         </div>
         <SubmitForm onSubmit={submit} onError={error}>
           <div
@@ -50,10 +67,7 @@ export default function ModelConfiguration({
             role="radiogroup"
             aria-label="模型服务"
           >
-            {[
-              ["deepseek", "DeepSeek", "Flash + V4 Pro"],
-              ["fluxport", "Fluxport", "gpt-6-sol"],
-            ].map(([id, name, model]) => (
+            {providers.map(([id, name, model]) => (
               <label key={id} className={selected === id ? "selected" : ""}>
                 <input
                   type="radio"
@@ -106,6 +120,37 @@ export default function ModelConfiguration({
                 密钥；资料分析、多空讨论和最终决策均使用 gpt-6-sol。
               </p>
             </>
+          ) : selected === "grsai" ? (
+            <>
+              <div className="form-grid">
+                <label>
+                  模型
+                  <select
+                    value={form.grsai_model || "gemini-3.1-pro"}
+                    onChange={(e) =>
+                      setForm({ ...form, grsai_model: e.target.value })
+                    }
+                  >
+                    <option value="gemini-3.1-pro">gemini-3.1-pro</option>
+                  </select>
+                </label>
+                <label>
+                  接口地址
+                  <input
+                    type="url"
+                    required
+                    value={form.grsai_base_url || "https://grsaiapi.com/v1"}
+                    onChange={(e) =>
+                      setForm({ ...form, grsai_base_url: e.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              <p className="hint">
+                使用 GrsAI 的独立 LLM 密钥（OpenAI 兼容 · grsaiapi.com）；资料分析与最终决策均使用
+                gemini-3.1-pro。
+              </p>
+            </>
           ) : (
             <div className="model-cards">
               <div>
@@ -119,7 +164,7 @@ export default function ModelConfiguration({
             </div>
           )}
           <label>
-            {selected === "fluxport" ? "Fluxport LLM" : "DeepSeek"} API Key
+            {keyLabels[selected] || "DeepSeek"} API Key
             <input
               type={showingMask ? "text" : "password"}
               autoComplete="new-password"
@@ -147,11 +192,11 @@ export default function ModelConfiguration({
         <ShieldCheck size={24} />
         <h2>独立配置，按任务生效</h2>
         <p>
-          两个服务分别保存密钥。切换只影响新提交的研究；已在队列中的任务继续使用提交时的模型配置。
+          各服务分别保存密钥。切换只影响新提交的研究；已在队列中的任务继续使用提交时的模型配置。
         </p>
         <p>
-          密钥保存在本机 .env；页面只显示打码预览，完整密钥不会写入交易日志或报告。Fluxport
-          通过兼容接口执行研究，连接失败会明确报错。
+          密钥保存在本机 .env；页面只显示打码预览，完整密钥不会写入交易日志或报告。Fluxport /
+          GrsAI 通过 OpenAI 兼容接口执行研究，连接失败会明确报错。
         </p>
         <p>启用持仓时，研究资料、当前持仓和成本会发送给所选择的模型服务。</p>
       </section>
