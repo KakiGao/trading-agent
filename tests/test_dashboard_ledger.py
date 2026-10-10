@@ -215,3 +215,46 @@ def test_grsai_maps_to_gemini_chat_completions(monkeypatch):
     assert llm.invoke('ping').content == 'ok'
     with pytest.raises(ValidationError):
         ModelSettings(grsai_model='unsupported')
+
+
+def test_g4f_maps_and_parses_tool_json(monkeypatch):
+    import g4f.client as g4f_mod
+    from tradingagents.llm_clients.factory import create_tier_client
+
+    class FakeMsg:
+        content = '{"tool_calls":[{"name":"get_price","args":{"ticker":"AMD"}}]}'
+
+    class FakeChoice:
+        message = FakeMsg()
+
+    class FakeResp:
+        choices = [FakeChoice()]
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kwargs):
+                    assert kwargs['model'] == 'gemini-2.5-flash'
+                    assert getattr(kwargs['provider'], '__name__', '') == 'Gemini'
+                    return FakeResp()
+
+    monkeypatch.setattr(g4f_mod, 'Client', FakeClient)
+    cfg = worker_config(
+        {'llm_provider': 'deepseek'},
+        {'provider': 'g4f', 'g4f_model': 'gemini-2.5-flash'},
+    )
+    assert cfg['llm_provider'] == 'g4f'
+    assert cfg['quick_think_llm'] == 'gemini-2.5-flash'
+    llm = create_tier_client(cfg, 'quick').get_llm()
+    result = llm.bind_tools([
+        {'type': 'function', 'function': {'name': 'get_price', 'description': 'p', 'parameters': {'type': 'object', 'properties': {'ticker': {'type': 'string'}}}}}
+    ]).invoke('price?')
+    assert result.tool_calls[0]['name'] == 'get_price'
+    assert result.tool_calls[0]['args'] == {'ticker': 'AMD'}
+    with pytest.raises(ValidationError):
+        ModelSettings(g4f_model='unsupported')
+    assert ModelSettings(provider='gemini_web').provider == 'g4f'

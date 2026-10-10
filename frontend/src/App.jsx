@@ -569,6 +569,7 @@ export default function App() {
             settings={state.settings}
             providerKeys={state.provider_keys}
             providerKeyMasks={state.provider_key_masks}
+            g4fCookiesConfigured={state.g4f_cookies_configured}
             save={save}
             mutate={mutate}
             refresh={refresh}

@@ -41,6 +41,10 @@ def create_llm_client(
         from .google_client import GoogleClient
         return GoogleClient(model, base_url, **kwargs)
 
+    if provider_lower == "g4f":
+        from .g4f_client import G4FClient
+        return G4FClient(model, base_url, **kwargs)
+
     if provider_lower == "azure":
         from .azure_client import AzureOpenAIClient
         return AzureOpenAIClient(model, base_url, **kwargs)

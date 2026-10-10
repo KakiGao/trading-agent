@@ -34,7 +34,46 @@ STATIC = Path(__file__).parent / "static"
 DATA = Path(os.getenv("TRADINGAGENTS_DASHBOARD_DIR", Path.home() / ".tradingagents/dashboard"))
 
 
+G4F_COOKIE_FILE = Path.home() / ".g4f/cookies/google.json"
+
+
+def g4f_cookies_configured() -> bool:
+    if not G4F_COOKIE_FILE.is_file():
+        return False
+    try:
+        raw = json.loads(G4F_COOKIE_FILE.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+    if isinstance(raw, list):
+        names = {c.get("name") for c in raw if isinstance(c, dict)}
+        return "__Secure-1PSID" in names
+    return isinstance(raw, dict) and bool(raw.get("__Secure-1PSID"))
+
+
+def save_g4f_cookie_json(text: str) -> None:
+    """Persist EditThisCookie JSON for g4f Gemini Pro."""
+    text = text.strip()
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Cookie 须为合法 JSON（EditThisCookie 导出格式）") from exc
+    if isinstance(data, list):
+        names = {c.get("name") for c in data if isinstance(c, dict)}
+        if "__Secure-1PSID" not in names:
+            raise ValueError("JSON 中缺少 __Secure-1PSID")
+    elif isinstance(data, dict):
+        if not data.get("__Secure-1PSID"):
+            raise ValueError("JSON 中缺少 __Secure-1PSID")
+    else:
+        raise ValueError("Cookie JSON 须为数组或对象")
+    G4F_COOKIE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    G4F_COOKIE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    G4F_COOKIE_FILE.chmod(0o600)
+
+
 def key_value(provider="deepseek"):
+    if provider == "g4f":
+        return "1"
     name = KEY_NAMES[provider]
     env = dotenv_values(ROOT / ".env")
     raw = (env.get(name) or os.getenv(name) or "").strip()
@@ -49,7 +88,8 @@ def key_present(provider="deepseek"):
 
 
 def key_mask(provider="deepseek"):
-    # ponytail: show prefix+suffix only; full key stays on disk
+    if provider == "g4f":
+        return None
     raw = key_value(provider)
     if len(raw) < 8:
         return None
@@ -63,8 +103,8 @@ class RunRequest(BaseModel):
 
 
 class KeyRequest(BaseModel):
-    provider: Literal["deepseek", "fluxport", "grsai"] = "deepseek"
-    key: str = Field(min_length=8, max_length=512)
+    provider: Literal["deepseek", "fluxport", "grsai", "g4f"] = "deepseek"
+    key: str = Field(min_length=8, max_length=200000)
 
 
 class Engine:
@@ -235,7 +275,21 @@ def create_app(folder=DATA, background=True):
     @app.get("/api/state")
     def state():
         settings, due = store.config()
-        return {"csrf": token, "settings": settings.model_dump(), "next_due": due, "jobs": store.jobs(), "notifications": store.notifications(), "key_configured": key_present(settings.models.provider), "provider_keys": {p: key_present(p) for p in KEY_NAMES}, "provider_key_masks": {p: key_mask(p) for p in KEY_NAMES}, "storage": {"database": str(store.db), "persistent": True}, "today": now().date().isoformat(), "version": "0.6.0", "timezone": "Asia/Shanghai"}
+        return {
+            "csrf": token,
+            "settings": settings.model_dump(),
+            "next_due": due,
+            "jobs": store.jobs(),
+            "notifications": store.notifications(),
+            "key_configured": key_present(settings.models.provider),
+            "provider_keys": {p: key_present(p) for p in KEY_NAMES},
+            "provider_key_masks": {p: key_mask(p) for p in KEY_NAMES},
+            "g4f_cookies_configured": g4f_cookies_configured(),
+            "storage": {"database": str(store.db), "persistent": True},
+            "today": now().date().isoformat(),
+            "version": "0.6.0",
+            "timezone": "Asia/Shanghai",
+        }
 
     @app.post("/api/settings")
     def save_settings(settings: Settings):
@@ -252,6 +306,13 @@ def create_app(folder=DATA, background=True):
     @app.post("/api/key")
     def save_key(payload: KeyRequest):
         key = payload.key.strip().removeprefix("Bearer ").strip()
+        if payload.provider == "g4f":
+            try:
+                with store.lock:
+                    save_g4f_cookie_json(key)
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from None
+            return {"ok": True, "g4f_cookies_configured": True}
         if len(key) < 8 or any(ch.isspace() for ch in key) or "'" in key or '"' in key:
             raise HTTPException(400, "密钥不能包含空白或引号")
         with store.lock:

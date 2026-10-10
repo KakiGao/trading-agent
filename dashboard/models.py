@@ -11,6 +11,7 @@ KEY_NAMES = {
     "deepseek": "DEEPSEEK_API_KEY",
     "fluxport": "FLUXPORT_LLM_API_KEY",
     "grsai": "GRSAI_LLM_API_KEY",
+    "g4f": "G4F_ENABLED",
 }
 
 
@@ -33,11 +34,18 @@ def _https_v1_endpoint(value: str) -> str:
 
 
 class ModelSettings(BaseModel):
-    provider: Literal["deepseek", "fluxport", "grsai"] = "deepseek"
+    provider: Literal["deepseek", "fluxport", "grsai", "g4f"] = "deepseek"
     fluxport_base_url: str = FLUXPORT_BASE
     fluxport_model: Literal["gpt-6-sol"] = "gpt-6-sol"
     grsai_base_url: str = GRSAI_BASE
     grsai_model: Literal["gemini-3.1-pro"] = "gemini-3.1-pro"
+    g4f_model: Literal["gemini-3.1-pro", "gemini-2.5-flash", "gemini-2.0-flash"] = "gemini-2.5-flash"
+
+    @field_validator("provider", mode="before")
+    @classmethod
+    def remap_legacy(cls, value):
+        # gemini_web was abandoned; old saved settings remap here
+        return "g4f" if value == "gemini_web" else value
 
     @field_validator("fluxport_base_url", "grsai_base_url")
     @classmethod
@@ -81,6 +89,13 @@ def worker_config(config, model_settings):
             backend_url=selected.grsai_base_url,
             quick_think_llm=selected.grsai_model,
             deep_think_llm=selected.grsai_model,
+        )
+    elif selected.provider == "g4f":
+        cfg.update(
+            llm_provider="g4f",
+            backend_url=None,
+            quick_think_llm=selected.g4f_model,
+            deep_think_llm=selected.g4f_model,
         )
     else:
         cfg.update(

@@ -32,13 +32,15 @@ body {
 }
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 button,
 a,
 input,
-select {
+select,
+textarea {
   -webkit-tap-highlight-color: transparent;
 }
 button {
@@ -84,7 +86,8 @@ button {
   border: 0;
 }
 input,
-select {
+select,
+textarea {
   width: 100%;
   border: 1px solid #e4e1df;
   border-radius: 10px;
@@ -95,12 +98,19 @@ select {
   font-size: 13px;
 }
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px #1a73e833;
 }
-input::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: #9aa0a6;
+}
+textarea {
+  resize: vertical;
+  min-height: 140px;
+  line-height: 1.55;
 }
 input[type="checkbox"] {
   width: 16px;
@@ -121,7 +131,8 @@ label {
   color: #737570;
 }
 label > input,
-label > select {
+label > select,
+label > textarea {
   display: block;
   margin-top: 10px;
 }
@@ -1309,7 +1320,8 @@ td small {
   color: #958881;
 }
 .form-card label > input,
-.form-card label > select {
+.form-card label > select,
+.form-card label > textarea {
   font-size: 14px;
 }
 .hint {
@@ -3124,6 +3136,74 @@ label {
 }
 .model-page .hint {
   line-height: 1.9;
+}
+.cookie-field {
+  display: block;
+  margin-top: 4px;
+}
+.cookie-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.cookie-field-head span {
+  font-size: 13px;
+  color: #958881;
+}
+.cookie-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.cookie-status.ready {
+  background: #e6f4ea;
+  color: var(--green);
+}
+.cookie-status.missing {
+  background: #f1f3f4;
+  color: var(--muted);
+}
+.cookie-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.cookie-field textarea {
+  margin-top: 0;
+  min-height: 168px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border-color: var(--line);
+  background: linear-gradient(180deg, #fbfdff 0%, #f8f9fa 100%);
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  color: #3c4043;
+  tab-size: 2;
+}
+.cookie-field textarea:hover {
+  border-color: #c5cad1;
+}
+.cookie-field textarea:focus {
+  background: #fff;
+  border-color: var(--blue);
+}
+.cookie-field textarea::placeholder {
+  color: #9aa0a6;
+  font-family: inherit;
+  white-space: pre-wrap;
 }
 .inbox .notice.unread {
   background: var(--blue-soft);

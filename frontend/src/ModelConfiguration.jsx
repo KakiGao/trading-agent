@@ -6,24 +6,28 @@ const providers = [
   ["deepseek", "DeepSeek", "Flash + V4 Pro"],
   ["fluxport", "Fluxport", "gpt-6-sol"],
   ["grsai", "GrsAI", "gemini-3.1-pro"],
+  ["g4f", "GPT4Free", "Gemini Flash / Pro"],
 ];
 
 const labels = {
   deepseek: "DeepSeek",
   fluxport: "Fluxport · gpt-6-sol",
   grsai: "GrsAI · gemini-3.1-pro",
+  g4f: "GPT4Free · Gemini",
 };
 
 const keyLabels = {
   deepseek: "DeepSeek",
   fluxport: "Fluxport LLM",
   grsai: "GrsAI LLM",
+  g4f: "GPT4Free",
 };
 
 export default function ModelConfiguration({
   settings,
   providerKeys,
   providerKeyMasks,
+  g4fCookiesConfigured,
   save,
   mutate,
   refresh,
@@ -36,16 +40,29 @@ export default function ModelConfiguration({
     fluxport_base_url: "https://api.uselg.top/v1",
     grsai_model: "gemini-3.1-pro",
     grsai_base_url: "https://grsaiapi.com/v1",
+    g4f_model: "gemini-2.5-flash",
   };
-  const [form, setForm] = useState({ ...defaults, ...settings.models }),
+  const models = { ...defaults, ...settings.models };
+  if (models.provider === "gemini_web") models.provider = "g4f";
+  const [form, setForm] = useState(models),
     [key, setKey] = useState(""),
+    [cookieJson, setCookieJson] = useState(""),
     [focused, setFocused] = useState(false);
   const selected = form.provider,
-    active = settings.models?.provider || "deepseek",
+    active =
+      settings.models?.provider === "gemini_web"
+        ? "g4f"
+        : settings.models?.provider || "deepseek",
     mask = providerKeyMasks?.[selected] || "";
   const showingMask = Boolean(mask && !key && !focused);
   const submit = async () => {
-    if (key.trim()) {
+    if (selected === "g4f") {
+      if (cookieJson.trim()) {
+        await mutate("key", { provider: "g4f", key: cookieJson.trim() });
+      } else if (form.g4f_model === "gemini-3.1-pro" && !g4fCookiesConfigured) {
+        throw new Error("gemini-3.1-pro 需要粘贴 Google Cookie JSON");
+      }
+    } else if (key.trim()) {
       await mutate("key", { provider: selected, key });
       setKey("");
       setFocused(false);
@@ -151,6 +168,29 @@ export default function ModelConfiguration({
                 gemini-3.1-pro。
               </p>
             </>
+          ) : selected === "g4f" ? (
+            <>
+              <div className="form-grid">
+                <label>
+                  模型
+                  <select
+                    value={form.g4f_model || "gemini-2.5-flash"}
+                    onChange={(e) =>
+                      setForm({ ...form, g4f_model: e.target.value })
+                    }
+                  >
+                    <option value="gemini-3.1-pro">gemini-3.1-pro</option>
+                    <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                    <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                  </select>
+                </label>
+              </div>
+              <p className="hint">
+                通过 gpt4free（g4f）调用 Gemini。Flash 可匿名；Pro
+                需粘贴 EditThisCookie 导出的 JSON（保存到本机
+                ~/.g4f/cookies/google.json）。
+              </p>
+            </>
           ) : (
             <div className="model-cards">
               <div>
@@ -163,23 +203,52 @@ export default function ModelConfiguration({
               </div>
             </div>
           )}
-          <label>
-            {keyLabels[selected] || "DeepSeek"} API Key
-            <input
-              type={showingMask ? "text" : "password"}
-              autoComplete="new-password"
-              spellCheck={false}
-              value={showingMask ? mask : key}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder={mask ? "输入新密钥以更换" : "填写密钥"}
-            />
-          </label>
+          {selected === "g4f" ? (
+            <label className="cookie-field">
+              <div className="cookie-field-head">
+                <span>Google Cookie JSON</span>
+                <span
+                  className={`cookie-status ${g4fCookiesConfigured ? "ready" : "missing"}`}
+                >
+                  {g4fCookiesConfigured ? "已配置" : "未配置"}
+                </span>
+              </div>
+              <textarea
+                rows={7}
+                spellCheck={false}
+                autoComplete="off"
+                value={cookieJson}
+                onChange={(e) => setCookieJson(e.target.value)}
+                placeholder={
+                  g4fCookiesConfigured
+                    ? "本机已有 Cookie，粘贴新 JSON 可覆盖更新…"
+                    : '[\n  { "name": "__Secure-1PSID", "value": "…" }\n]'
+                }
+              />
+            </label>
+          ) : (
+            <label>
+              {keyLabels[selected] || "DeepSeek"} API Key
+              <input
+                type={showingMask ? "text" : "password"}
+                autoComplete="new-password"
+                spellCheck={false}
+                value={showingMask ? mask : key}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
+                onChange={(e) => setKey(e.target.value)}
+                placeholder={mask ? "输入新密钥以更换" : "填写密钥"}
+              />
+            </label>
+          )}
           <p className="hint">
-            {providerKeys?.[selected]
-              ? "本机已保存此服务的密钥；下方为打码显示，点击即可更换。"
-              : "此服务尚未配置密钥。"}
+            {selected === "g4f"
+              ? g4fCookiesConfigured
+                ? "本机已保存 Google Cookie（不回显明文）。Flash 可不填；换 Cookie 时粘贴新 JSON 后保存。"
+                : "尚未保存 Cookie。选 Pro 时必须粘贴；选 Flash 可跳过。"
+              : providerKeys?.[selected]
+                ? "本机已保存此服务的密钥；下方为打码显示，点击即可更换。"
+                : "此服务尚未配置密钥。"}
             保存配置不会发起模型请求，也不代表已验证模型权限或余额。
           </p>
           <Button type="submit" className="primary">
@@ -196,7 +265,7 @@ export default function ModelConfiguration({
         </p>
         <p>
           密钥保存在本机 .env；页面只显示打码预览，完整密钥不会写入交易日志或报告。Fluxport /
-          GrsAI 通过 OpenAI 兼容接口执行研究，连接失败会明确报错。
+          GrsAI 走 OpenAI 兼容接口；GPT4Free 走免费 Gemini 通道。
         </p>
         <p>启用持仓时，研究资料、当前持仓和成本会发送给所选择的模型服务。</p>
       </section>
