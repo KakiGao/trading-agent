@@ -11,10 +11,13 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from dashboard.core import Book, Settings, TZ, now, symbol
+
+ET = ZoneInfo("America/New_York")
 
 
 class Entry(BaseModel):
@@ -36,10 +39,15 @@ class Entry(BaseModel):
     @field_validator("occurred_at")
     @classmethod
     def valid_time(cls, value):
-        value = value.replace(tzinfo=TZ) if value.tzinfo is None else value.astimezone(TZ)
-        if value > now():
+        # Naive timestamps are US Eastern calendar dates (date-only UI).
+        value = (
+            datetime(value.year, value.month, value.day, tzinfo=ET)
+            if value.tzinfo is None
+            else value.astimezone(ET)
+        )
+        if value.date() > datetime.now(ET).date():
             raise ValueError("不能记录未来的交易")
-        return value
+        return value.astimezone(TZ)
 
     @model_validator(mode="after")
     def valid_entry(self):

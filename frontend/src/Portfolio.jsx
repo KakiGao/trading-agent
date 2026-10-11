@@ -10,6 +10,98 @@ import {
 import { Button, Empty, SubmitForm, TickerAvatar } from "./components.jsx";
 import { dateLabel, request } from "./data.js";
 
+function TickerField({ value, onChange, required, localTickers }) {
+  const [hits, setHits] = useState([]);
+  const [open, setOpen] = useState(false);
+  const timer = useRef(0);
+  const wrap = useRef(null);
+  useEffect(() => {
+    const onDoc = (e) => {
+      if (wrap.current && !wrap.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+  const localKey = localTickers.join("\0");
+  useEffect(() => {
+    const q = value.trim();
+    if (!q) {
+      setHits([]);
+      return;
+    }
+    const tickers = localKey ? localKey.split("\0") : [];
+    const local = tickers
+      .filter((t) => t.toLowerCase().includes(q.toLowerCase()))
+      .slice(0, 6)
+      .map((symbol) => ({ symbol, name: "自选 / 持仓", exchange: "" }));
+    setHits(local);
+    clearTimeout(timer.current);
+    const ac = new AbortController();
+    timer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/tickers/search?q=${encodeURIComponent(q)}`,
+          { signal: ac.signal },
+        );
+        if (!res.ok) return;
+        const body = await res.json();
+        const seen = new Set(local.map((h) => h.symbol));
+        const merged = [...local];
+        for (const item of body.results || []) {
+          if (seen.has(item.symbol)) continue;
+          seen.add(item.symbol);
+          merged.push(item);
+        }
+        setHits(merged.slice(0, 8));
+      } catch (e) {
+        if (e.name !== "AbortError") setHits(local);
+      }
+    }, 220);
+    return () => {
+      clearTimeout(timer.current);
+      ac.abort();
+    };
+  }, [value, localKey]);
+  return (
+    <div className="ticker-suggest" ref={wrap}>
+      <input
+        required={required}
+        value={value}
+        placeholder="输入代码或公司名搜索"
+        maxLength={24}
+        autoComplete="off"
+        spellCheck={false}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+      />
+      {open && hits.length > 0 && (
+        <ul className="ticker-suggest-list" role="listbox">
+          {hits.map((h) => (
+            <li key={h.symbol}>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(h.symbol);
+                  setOpen(false);
+                }}
+              >
+                <strong>{h.symbol}</strong>
+                <small>
+                  {[h.name, h.exchange].filter(Boolean).join(" · ")}
+                </small>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 const kinds = {
   buy: "买入",
   sell: "卖出",
@@ -19,12 +111,27 @@ const kinds = {
   opening: "期初持仓",
 };
 const cashKinds = ["deposit", "withdraw", "dividend"];
-const localTime = () =>
-  new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 16);
+const ET = "America/New_York";
+const easternToday = () =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: ET,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+const ledgerDateLabel = (iso) =>
+  iso
+    ? new Date(iso).toLocaleDateString("zh-CN", {
+        timeZone: ET,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      })
+    : "";
 const initialEntry = () => ({
   id: crypto.randomUUID(),
   kind: "buy",
-  occurred_at: localTime(),
+  occurred_at: easternToday(),
   ticker: "",
   quantity: "",
   price: "",
@@ -272,7 +379,7 @@ export default function Portfolio({
   const add = async () => {
     const payload = {
       ...entry,
-      occurred_at: entry.occurred_at + ":00+08:00",
+      occurred_at: `${entry.occurred_at}T00:00:00`,
       ticker: cashEntry
         ? entry.kind === "dividend"
           ? entry.ticker || null
@@ -287,7 +394,7 @@ export default function Portfolio({
     };
     const result = await mutate("portfolio/entries", payload);
     setData(result);
-    setEntry(initialEntry());
+    setEntry({ ...initialEntry(), occurred_at: entry.occurred_at });
     await refresh();
     message("记录已保存，持仓和收益已更新");
   };
@@ -489,9 +596,9 @@ export default function Portfolio({
                     </select>
                   </label>
                   <label>
-                    发生时间 · 北京时间
+                    发生日期 · 美东时间
                     <input
-                      type="datetime-local"
+                      type="date"
                       required
                       value={entry.occurred_at}
                       onChange={(e) => update("occurred_at", e.target.value)}
@@ -501,12 +608,21 @@ export default function Portfolio({
                 {(!cashEntry || entry.kind === "dividend") && (
                   <label>
                     股票代码{entry.kind === "dividend" ? "（可选）" : ""}
-                    <input
+                    <TickerField
                       required={!cashEntry}
                       value={entry.ticker}
-                      placeholder="例如 NVDA / 0700.HK"
-                      maxLength={24}
-                      onChange={(e) => update("ticker", e.target.value)}
+                      onChange={(v) => update("ticker", v)}
+                      localTickers={[
+                        ...new Set([
+                          ...(settings.watchlist || []),
+                          ...(settings.portfolio?.positions || []).map(
+                            (p) => p.ticker,
+                          ),
+                          ...(data?.entries || [])
+                            .map((e) => e.ticker)
+                            .filter(Boolean),
+                        ]),
+                      ]}
                     />
                   </label>
                 )}
@@ -669,7 +785,7 @@ export default function Portfolio({
                       <tr key={e.id}>
                         <td>
                           <strong>{kinds[e.kind]}</strong>
-                          <small>{dateLabel(e.occurred_at, true)}</small>
+                          <small>{ledgerDateLabel(e.occurred_at)}</small>
                         </td>
                         <td>{e.ticker || "—"}</td>
                         <td>
@@ -696,7 +812,7 @@ export default function Portfolio({
                           <button
                             className="text-button danger"
                             onClick={() => setPending(e)}
-                            aria-label={`删除 ${kinds[e.kind]} ${e.ticker || ""} ${dateLabel(e.occurred_at, true)}`}
+                            aria-label={`删除 ${kinds[e.kind]} ${e.ticker || ""} ${ledgerDateLabel(e.occurred_at)}`}
                           >
                             <Trash2 size={13} />
                             删除并撤回
@@ -733,7 +849,7 @@ export default function Portfolio({
             <h2 id="delete-title">撤回这笔{kinds[pending.kind]}记录？</h2>
             <p>
               {pending.ticker || currency} ·{" "}
-              {dateLabel(pending.occurred_at, true)}
+              {ledgerDateLabel(pending.occurred_at)}
             </p>
             <p>
               删除后会重新计算现金、持仓成本和收益图表。如果后续卖出或资金支出依赖此记录，需要先撤回那些记录。

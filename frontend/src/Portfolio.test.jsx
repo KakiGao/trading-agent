@@ -83,7 +83,7 @@ it("records a cash deposit and immediately displays its journal and chart", asyn
   expect(payload.kind).toBe("deposit");
   expect(payload.amount).toBe("1000");
   expect(payload.quantity).toBe("0");
-  expect(payload.occurred_at).toMatch(/\+08:00$/);
+  expect(payload.occurred_at).toMatch(/^\d{4}-\d{2}-\d{2}T00:00:00$/);
   expect(await screen.findByText("测试入金")).toBeVisible();
   await userEvent.click(screen.getByRole("tab", { name: "总览" }));
   await screen.findByRole("img", { name: "交易记录收益曲线" });

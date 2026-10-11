@@ -341,6 +341,37 @@ def create_app(folder=DATA, background=True):
     def portfolio():
         return ledger_snapshot(store)
 
+    @app.get("/api/tickers/search")
+    def ticker_search(q: str = ""):
+        query = q.strip()
+        if len(query) < 1 or len(query) > 32:
+            return {"results": []}
+        settings, _ = store.config()
+        needle = query.upper()
+        local, seen = [], set()
+        for ticker in list(settings.watchlist) + [p.ticker for p in settings.portfolio.positions]:
+            if needle in ticker.upper() and ticker not in seen:
+                seen.add(ticker)
+                local.append({"symbol": ticker, "name": "自选 / 持仓", "exchange": ""})
+        try:
+            import yfinance as yf
+
+            quotes = yf.Search(query, max_results=8).quotes or []
+        except Exception:
+            quotes = []
+        remote = []
+        for item in quotes:
+            sym = (item.get("symbol") or "").strip()
+            if not sym or sym in seen:
+                continue
+            seen.add(sym)
+            remote.append({
+                "symbol": sym,
+                "name": item.get("shortname") or item.get("longname") or "",
+                "exchange": item.get("exchDisp") or item.get("exchange") or "",
+            })
+        return {"results": (local + remote)[:8]}
+
     @app.post("/api/portfolio/entries")
     def add_entry(entry: Entry):
         try:

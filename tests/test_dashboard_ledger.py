@@ -100,6 +100,14 @@ def test_schema_migrates_existing_holdings_once_and_creates_backup(tmp_path):
     assert (tmp_path/'before-ledger-migration.db').exists()
 
 
+def test_naive_occurred_at_is_eastern_date(tmp_path):
+    e = Entry.model_validate(
+        {"kind": "deposit", "amount": "1", "occurred_at": "2026-06-15T00:00:00"}
+    )
+    # EDT (UTC-4) midnight → Shanghai same calendar day at noon.
+    assert e.occurred_at.isoformat() == "2026-06-15T12:00:00+08:00"
+
+
 def test_invalid_entries_do_not_modify_state(tmp_path):
     s=Store(tmp_path)
     for kind,kwargs in [('sell',dict(ticker='AAPL',quantity=1,price=100)),('buy',dict(ticker='AAPL',quantity=1,price=100)),('withdraw',dict(amount=1))]:
@@ -115,6 +123,23 @@ def test_currency_guard_and_same_time_order(tmp_path):
     settings=s.config()[0];settings.portfolio.currency='HKD'
     with pytest.raises(ValueError):s.save(settings)
     assert snapshot(s)['summary']['cash']==800
+
+
+def test_ticker_search_merges_local_and_yahoo(tmp_path, monkeypatch):
+    class FakeSearch:
+        def __init__(self, *a, **k):
+            self.quotes = [{"symbol": "NVDA", "shortname": "NVIDIA Corporation", "exchDisp": "NASDAQ"}]
+
+    monkeypatch.setitem(__import__("sys").modules, "yfinance", type("yf", (), {"Search": FakeSearch}))
+    s = Store(tmp_path)
+    settings = s.config()[0]
+    settings.watchlist = ["NVDL"]
+    s.save(settings)
+    with TestClient(create_app(tmp_path, background=False)) as c:
+        body = c.get("/api/tickers/search", params={"q": "NV"}).json()
+        symbols = [r["symbol"] for r in body["results"]]
+        assert symbols[0] == "NVDL"
+        assert "NVDA" in symbols
 
 
 def test_api_persistence_export_and_delete(tmp_path):
