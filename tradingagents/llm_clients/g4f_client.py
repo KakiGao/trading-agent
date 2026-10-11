@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -20,6 +22,20 @@ from .validators import validate_model
 
 _TOOL_RE = re.compile(r"\{[^{}]*\"tool_calls\"\s*:\s*\[[\s\S]*?\]\s*\}")
 _COOKIE_JSON = Path.home() / ".g4f/cookies/google.json"
+# Gemini web free tier flakes under burst traffic; space worker LLM turns.
+_G4F_GAP_SEC = 5.0
+_G4F_LOCK = threading.Lock()
+_G4F_LAST = 0.0
+_TRANSIENT = re.compile(r"sorry,\s*something went wrong|try your request again", re.I)
+
+
+def _pace_g4f():
+    global _G4F_LAST
+    with _G4F_LOCK:
+        wait = _G4F_GAP_SEC - (time.monotonic() - _G4F_LAST)
+        if wait > 0:
+            time.sleep(wait)
+        _G4F_LAST = time.monotonic()
 
 
 def _load_google_cookies() -> dict[str, str] | None:
@@ -128,9 +144,16 @@ class G4FChat(BaseChatModel):
             set_cookies(".google.com", cookies)
             create_kwargs["cookies"] = cookies
         client = Client()
+        text = ""
         # Full reply per turn (not token stream); UI live-log reads on_llm_end.
-        response = client.chat.completions.create(**create_kwargs)
-        text = (response.choices[0].message.content or "").strip()
+        for attempt in range(2):
+            _pace_g4f()
+            response = client.chat.completions.create(**create_kwargs)
+            text = (response.choices[0].message.content or "").strip()
+            if _TRANSIENT.search(text) and attempt == 0:
+                time.sleep(_G4F_GAP_SEC)
+                continue
+            break
         tool_calls = _parse_tool_calls(text) if tools else []
         message = AIMessage(content="" if tool_calls else text, tool_calls=tool_calls)
         return ChatResult(generations=[ChatGeneration(message=message)])

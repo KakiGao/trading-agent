@@ -60,6 +60,7 @@ class Book(BaseModel):
 class Settings(BaseModel):
     models: ModelSettings = Field(default_factory=ModelSettings)
     watchlist: list[str] = Field(default_factory=list, max_length=50)
+    starred: list[str] = Field(default_factory=list, max_length=50)
     portfolio: Book = Field(default_factory=Book)
     analysts: list[str] = Field(default_factory=lambda: ["market", "news", "fundamentals", "social"])
     schedule_enabled: bool = False
@@ -69,7 +70,7 @@ class Settings(BaseModel):
     weekdays_only: bool = True
     notify_mode: str = "changes"
 
-    @field_validator("watchlist")
+    @field_validator("watchlist", "starred")
     @classmethod
     def tickers(cls, values):
         return list(dict.fromkeys(symbol(s) for s in values))
@@ -242,12 +243,12 @@ class Store:
         return row["rating"] if row else None
 
     def remove(self, jid):
-        """Drop a finished incomplete job from history (not queued/running)."""
+        """Drop a finished job from history (not queued/running — cancel those first)."""
         with self.lock, self.connect() as conn:
             row = conn.execute("SELECT status FROM jobs WHERE id=?", (jid,)).fetchone()
             if not row:
                 return False
-            if row["status"] not in ("failed", "interrupted"):
-                raise ValueError("只能删除未完成或已中断的记录")
+            if row["status"] in ("queued", "running"):
+                raise ValueError("进行中的任务请先取消，再删除")
             conn.execute("DELETE FROM jobs WHERE id=?", (jid,))
         return True

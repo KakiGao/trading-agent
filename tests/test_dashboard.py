@@ -33,6 +33,11 @@ def test_local_ui_and_api_guard(client):
     assert client.post("/api/run", json={"ticker": "NVDA"}, headers={"X-Dashboard-Token": "wrong"}).status_code == 403
 
 
+def test_starred_normalizes_like_watchlist():
+    settings = Settings(starred=["nvda", "NVDA", "0700.HK"])
+    assert settings.starred == ["NVDA", "0700.HK"]
+
+
 def test_settings_persist_and_snapshot_holdings(client):
     settings = Settings(watchlist=["700.HK", "0700.HK"], portfolio={"enabled": True, "currency": "HKD"})
     assert client.post("/api/settings", json=settings.model_dump()).status_code == 200
@@ -40,6 +45,7 @@ def test_settings_persist_and_snapshot_holdings(client):
     assert client.post("/api/portfolio/entries", json=payload).status_code == 200
     state = client.get("/api/state").json()
     assert state["settings"]["watchlist"] == ["0700.HK"]
+    assert state["settings"]["starred"] == []
     ids = client.post("/api/run", json={}).json()["ids"]
     assert len(ids) == 1
     assert client.post("/api/portfolio/entries", json=payload).status_code == 200
@@ -213,6 +219,14 @@ def test_delete_incomplete_job_and_live_transcript(client, monkeypatch):
     assert client.post(f"/api/job/{jid}/delete").status_code == 200
     assert store.jobs() == []
     assert client.get(f"/api/job/{jid}").status_code == 404
+
+
+def test_delete_completed_job(client, monkeypatch):
+    store = client.app.state.store
+    jid = client.post("/api/run", json={"ticker": "KO"}).json()["ids"][0]
+    store.update(jid, status="completed", stage="分析完成", rating="Hold", result='{"rating":"Hold","reports":{}}')
+    assert client.post(f"/api/job/{jid}/delete").status_code == 200
+    assert store.jobs() == []
 
 
 def test_memory_reads_original_log(client, monkeypatch, tmp_path):

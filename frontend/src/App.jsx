@@ -17,6 +17,7 @@ import {
   LoaderCircle,
   Activity,
   Layers3,
+  Star,
 } from "lucide-react";
 import useDashboard from "./useDashboard.js";
 import {
@@ -215,19 +216,6 @@ export default function App() {
       <div className="main-column">
       <main className="workspace">
         <div className="workspace-toolbar">
-          <div className="toolbar-actions">
-            {view === "overview" && (
-              <Button
-                className="primary"
-                busy={busy === "all"}
-                disabled={!tickers.length}
-                onClick={() => act(() => run(), "all")}
-              >
-                <Plus size={14} />
-                分析全部关注
-              </Button>
-            )}
-          </div>
           <span>
             <i className={online ? "online-dot" : "offline-dot"} />
             {online ? "已同步" : "等待重连"}
@@ -346,10 +334,15 @@ export default function App() {
                   <span>操作</span>
                 </div>
                 <div className="watch-rows">
-                  {tickers
+                  {[...tickers]
                     .filter((t) =>
                       t.toLowerCase().includes(query.toLowerCase()),
                     )
+                    .sort((a, b) => {
+                      const sa = state.settings.starred?.includes(a) ? 0 : 1;
+                      const sb = state.settings.starred?.includes(b) ? 0 : 1;
+                      return sa - sb || tickers.indexOf(a) - tickers.indexOf(b);
+                    })
                     .map((t, index) => {
                       const latest = completed.find((j) => j.ticker === t),
                         working = active.find((j) => j.ticker === t),
@@ -357,11 +350,12 @@ export default function App() {
                           state.settings.portfolio.enabled &&
                           state.settings.portfolio.positions.some(
                             (p) => p.ticker === t,
-                          );
+                          ),
+                        starred = Boolean(state.settings.starred?.includes(t));
                       return (
                         <article
                           key={t}
-                          className={`watch-row ${ticker === t ? "selected" : ""}`}
+                          className={`watch-row ${ticker === t ? "selected" : ""} ${starred ? "starred" : ""}`}
                         >
                           <button
                             className="ticker-select"
@@ -373,9 +367,23 @@ export default function App() {
                               tone={`tone-${index % 4}`}
                             />
                             <span>
-                              <strong>{t}</strong>
+                              <strong>
+                                {starred && (
+                                  <Star
+                                    size={12}
+                                    className="star-mark"
+                                    fill="currentColor"
+                                    stroke="currentColor"
+                                  />
+                                )}
+                                {t}
+                              </strong>
                               <small>
-                                {held ? "我的持仓" : "自选观察"}
+                                {starred
+                                  ? "特别关注"
+                                  : held
+                                    ? "我的持仓"
+                                    : "自选观察"}
                                 {working
                                   ? " · " +
                                     (working.status === "queued"
@@ -387,6 +395,31 @@ export default function App() {
                           </button>
                           <Badge rating={latest?.rating} />
                           <div className="row-actions">
+                            <button
+                              className={`icon-button star-watch ${starred ? "on" : ""}`}
+                              aria-label={
+                                starred
+                                  ? `取消特别关注 ${t}`
+                                  : `特别关注 ${t}`
+                              }
+                              aria-pressed={starred}
+                              onClick={() =>
+                                act(async () => {
+                                  const current = state.settings.starred || [];
+                                  await save({
+                                    starred: starred
+                                      ? current.filter((s) => s !== t)
+                                      : [...current, t],
+                                  });
+                                }, `star-${t}`)
+                              }
+                            >
+                              <Star
+                                size={13}
+                                fill={starred ? "currentColor" : "none"}
+                                stroke="currentColor"
+                              />
+                            </button>
                             <button
                               className="analyze-button"
                               disabled={Boolean(working) || busy === `run-${t}`}
@@ -412,6 +445,9 @@ export default function App() {
                                         state.settings.watchlist.filter(
                                           (s) => s !== t,
                                         ),
+                                      starred: (
+                                        state.settings.starred || []
+                                      ).filter((s) => s !== t),
                                     });
                                     if (selection === t) {
                                       setSelection(null);
@@ -564,17 +600,14 @@ export default function App() {
                                   取消
                                 </button>
                               )}
-                              {(j.status === "failed" ||
-                                j.status === "interrupted") && (
+                              {!isActive(j) && (
                                 <button
                                   className="cancel-button"
                                   disabled={busy === `delete-${j.id}`}
                                   onClick={() =>
                                     act(async () => {
                                       await removeJob(j.id);
-                                      if (pinned === j.id || selection === j.ticker) {
-                                        setPinned(null);
-                                      }
+                                      if (pinned === j.id) setPinned(null);
                                     }, `delete-${j.id}`)
                                   }
                                 >

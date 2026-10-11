@@ -74,6 +74,9 @@ export function Empty({ title, children, icon: Icon = FileText }) {
 // ponytail: Parqet CDN (brand-colored marks); letter badge if missing
 export function TickerAvatar({ ticker, className = "", tone = "" }) {
   const [broken, setBroken] = useState(false);
+  useEffect(() => {
+    setBroken(false);
+  }, [ticker]);
   if (broken) {
     return (
       <span className={`ticker-avatar ${tone} ${className}`.trim()}>

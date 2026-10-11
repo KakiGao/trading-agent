@@ -456,7 +456,7 @@ label > textarea {
   height: 61px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   font-size: 12px;
   color: #a19d9b;
 }
@@ -638,7 +638,7 @@ label > textarea {
 }
 .list-columns {
   display: grid;
-  grid-template-columns: 1fr 65px 88px;
+  grid-template-columns: 1fr 65px 118px;
   gap: 12px;
   margin: 0 26px;
   padding: 0 2px 12px;
@@ -660,7 +660,7 @@ label > textarea {
 }
 .watch-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 65px 88px;
+  grid-template-columns: minmax(0, 1fr) 65px 118px;
   gap: 12px;
   align-items: center;
   min-height: 70px;
@@ -735,9 +735,16 @@ label > textarea {
 .ticker-select strong {
   font-weight: 550;
   font-size: 14px;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 5px;
   letter-spacing: 0.15px;
   overflow-wrap: anywhere;
+}
+.ticker-select .star-mark {
+  color: #c9a227;
+  flex-shrink: 0;
+  fill: currentColor !important;
 }
 .ticker-select small {
   display: block;
@@ -819,6 +826,25 @@ label > textarea {
 }
 .watch-row:hover .remove-watch {
   opacity: 1;
+}
+.star-watch {
+  padding: 3px;
+  opacity: 0.45;
+}
+.watch-row:hover .star-watch,
+.star-watch.on {
+  opacity: 1;
+}
+.star-watch.on {
+  color: #c9a227;
+}
+.star-watch.on svg,
+.star-watch.on svg * {
+  fill: currentColor !important;
+}
+.star-watch:hover {
+  color: #c9a227;
+  background: #faf6e8;
 }
 .watch-footer {
   display: flex;
@@ -1894,11 +1920,11 @@ footer small {
   }
   .list-columns {
     margin: 0 20px;
-    grid-template-columns: 1fr 54px 81px;
+    grid-template-columns: 1fr 54px 108px;
     gap: 8px;
   }
   .watch-row {
-    grid-template-columns: minmax(0, 1fr) 54px 81px;
+    grid-template-columns: minmax(0, 1fr) 54px 108px;
     gap: 8px;
     padding-left: 8px;
     padding-right: 8px;
@@ -2052,7 +2078,7 @@ footer small {
   }
   .list-columns,
   .watch-row {
-    grid-template-columns: 1fr 85px 110px;
+    grid-template-columns: 1fr 85px 140px;
     gap: 18px;
   }
   .ticker-avatar {
@@ -2066,7 +2092,8 @@ footer small {
     min-width: 62px;
     font-size: 13px;
   }
-  .remove-watch {
+  .remove-watch,
+  .star-watch {
     opacity: 1;
   }
   .watch-row {
