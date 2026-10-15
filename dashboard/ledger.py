@@ -172,8 +172,39 @@ def mutate(store, entry=None, delete_id=None):
         return data
 
 
+def sector_buckets(positions, cash):
+    """Group holding market value by Yahoo sector; ETFs without sector → ETF / 基金."""
+    from tradingagents.agents.context import resolve_instrument_identity
+
+    buckets: dict[str, Decimal] = {}
+    for p in positions:
+        ident = resolve_instrument_identity(p["ticker"])
+        qt = (ident.get("quote_type") or "").upper()
+        sector = ident.get("sector")
+        if not sector:
+            if qt in ("ETF", "MUTUALFUND"):
+                sector = "ETF / 基金"
+            elif qt == "CRYPTOCURRENCY":
+                sector = "加密货币"
+            else:
+                sector = "未分类"
+        buckets[sector] = buckets.get(sector, Decimal(0)) + Decimal(str(p["value"]))
+    if Decimal(str(cash or 0)) > 0:
+        buckets["现金"] = buckets.get("现金", Decimal(0)) + Decimal(str(cash))
+    return [
+        {"sector": name, "value": number(value)}
+        for name, value in sorted(buckets.items(), key=lambda kv: kv[1], reverse=True)
+        if value > 0
+    ]
+
+
 def snapshot(store):
     with store.lock, store.connect() as conn:
         data = replay(rows(conn))
         book = Settings.model_validate_json(conn.execute("SELECT body FROM config WHERE id=1").fetchone()[0]).portfolio
-        return {**data, "currency": book.currency, "enabled": book.enabled}
+        return {
+            **data,
+            "by_sector": sector_buckets(data["positions"], data["summary"]["cash"]),
+            "currency": book.currency,
+            "enabled": book.enabled,
+        }

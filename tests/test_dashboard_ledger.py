@@ -108,6 +108,30 @@ def test_naive_occurred_at_is_eastern_date(tmp_path):
     assert e.occurred_at.isoformat() == "2026-06-15T12:00:00+08:00"
 
 
+def test_sector_buckets_group_by_yahoo_sector(monkeypatch):
+    from dashboard import ledger as ledger_mod
+
+    monkeypatch.setattr(
+        "tradingagents.agents.context.resolve_instrument_identity",
+        lambda t: {
+            "AAPL": {"sector": "Technology", "quote_type": "EQUITY"},
+            "SGOV": {"quote_type": "ETF"},
+        }.get(t, {}),
+    )
+    rows = ledger_mod.sector_buckets(
+        [
+            {"ticker": "AAPL", "value": 100},
+            {"ticker": "SGOV", "value": 50},
+        ],
+        cash=25,
+    )
+    assert rows == [
+        {"sector": "Technology", "value": 100.0},
+        {"sector": "ETF / 基金", "value": 50.0},
+        {"sector": "现金", "value": 25.0},
+    ]
+
+
 def test_invalid_entries_do_not_modify_state(tmp_path):
     s=Store(tmp_path)
     for kind,kwargs in [('sell',dict(ticker='AAPL',quantity=1,price=100)),('buy',dict(ticker='AAPL',quantity=1,price=100)),('withdraw',dict(amount=1))]:

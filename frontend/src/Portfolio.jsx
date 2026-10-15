@@ -266,18 +266,28 @@ export function PerformanceChart({ series, currency }) {
   );
 }
 
-export function AllocationChart({ positions, cash, currency }) {
+export function AllocationChart({
+  positions,
+  cash = 0,
+  currency,
+  emptyTitle = "暂无资产分布",
+  emptyHint = "添加资金和持仓后自动统计。",
+  ariaLabel = "按最后成交价估算的资产分布",
+}) {
   const items = [
-    ...positions.map((p) => ({ label: p.ticker, value: p.value })),
-    { label: "现金", value: cash },
+    ...positions.map((p) => ({
+      label: p.label || p.ticker,
+      value: p.value,
+    })),
+    ...(cash ? [{ label: "现金", value: cash }] : []),
   ]
     .filter((p) => p.value > 0)
     .sort((a, b) => b.value - a.value);
   const total = items.reduce((sum, p) => sum + p.value, 0);
   if (!items.length)
     return (
-      <Empty icon={Wallet} title="暂无资产分布">
-        添加资金和持仓后自动统计。
+      <Empty icon={Wallet} title={emptyTitle}>
+        {emptyHint}
       </Empty>
     );
   const colors = [
@@ -291,11 +301,7 @@ export function AllocationChart({ positions, cash, currency }) {
   let offset = 0;
   return (
     <div className="allocation-chart">
-      <svg
-        viewBox="0 0 420 38"
-        role="img"
-        aria-label="按最后成交价估算的资产分布"
-      >
+      <svg viewBox="0 0 420 38" role="img" aria-label={ariaLabel}>
         {items.map((p, i) => {
           const x = offset;
           offset += (p.value / total) * 420;
@@ -510,6 +516,22 @@ export default function Portfolio({
               <p className="chart-footnote">
                 入出金不计入收益。浮盈亏采用最后记录的成交价，不是实时行情；历史点仅在有记录时变化。
               </p>
+            </section>
+            <section className="card">
+              <div className="card-heading">
+                <h2>行业分布</h2>
+                <span className="muted">按持仓市值</span>
+              </div>
+              <AllocationChart
+                positions={(data.by_sector || []).map((row) => ({
+                  ticker: row.sector,
+                  value: row.value,
+                }))}
+                currency={currency}
+                emptyTitle="暂无行业分布"
+                emptyHint="有持仓后按 Yahoo 行业板块汇总。"
+                ariaLabel="按持仓市值估算的行业分布"
+              />
             </section>
             <section className="card">
               <div className="card-heading">

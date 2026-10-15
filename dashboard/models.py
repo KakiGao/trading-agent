@@ -36,7 +36,13 @@ def _https_v1_endpoint(value: str) -> str:
 class ModelSettings(BaseModel):
     provider: Literal["deepseek", "fluxport", "grsai", "g4f"] = "deepseek"
     fluxport_base_url: str = FLUXPORT_BASE
-    fluxport_model: Literal["gpt-6-sol"] = "gpt-6-sol"
+    fluxport_model: Literal[
+        "gpt-6-sol",
+        "gpt-6.1-sol",
+        "gpt-6-luna",
+        "grok-4.7",
+        "gemini-3.8-flash",
+    ] = "gpt-6-sol"
     grsai_base_url: str = GRSAI_BASE
     grsai_model: Literal["gemini-3.1-pro"] = "gemini-3.1-pro"
     g4f_model: Literal["gemini-3.1-pro", "gemini-2.5-flash", "gemini-2.0-flash"] = "gemini-2.5-flash"

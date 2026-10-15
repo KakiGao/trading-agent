@@ -2,16 +2,24 @@ import { useState } from "react";
 import { Cpu, KeyRound, Check, ShieldCheck } from "lucide-react";
 import { Button, SubmitForm } from "./components.jsx";
 
+const fluxportModels = [
+  "gpt-6-sol",
+  "gpt-6.1-sol",
+  "gpt-6-luna",
+  "grok-4.7",
+  "gemini-3.8-flash",
+];
+
 const providers = [
   ["deepseek", "DeepSeek", "Flash + V4 Pro"],
-  ["fluxport", "Fluxport", "gpt-6-sol"],
+  ["fluxport", "Fluxport", "多模型可选"],
   ["grsai", "GrsAI", "gemini-3.1-pro"],
   ["g4f", "GPT4Free", "Gemini Flash / Pro"],
 ];
 
 const labels = {
   deepseek: "DeepSeek",
-  fluxport: "Fluxport · gpt-6-sol",
+  fluxport: "Fluxport",
   grsai: "GrsAI · gemini-3.1-pro",
   g4f: "GPT4Free · Gemini",
 };
@@ -77,7 +85,12 @@ export default function ModelConfiguration({
       <section className="card form-card">
         <div className="card-heading">
           <h2>模型配置</h2>
-          <span className="badge">当前使用 {labels[active] || "DeepSeek"}</span>
+          <span className="badge">
+            当前使用{" "}
+            {active === "fluxport"
+              ? `Fluxport · ${settings.models?.fluxport_model || "gpt-6-sol"}`
+              : labels[active] || "DeepSeek"}
+          </span>
         </div>
         <SubmitForm onSubmit={submit} onError={error}>
           <div
@@ -118,7 +131,11 @@ export default function ModelConfiguration({
                       setForm({ ...form, fluxport_model: e.target.value })
                     }
                   >
-                    <option value="gpt-6-sol">gpt-6-sol</option>
+                    {fluxportModels.map((id) => (
+                      <option key={id} value={id}>
+                        {id}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label>
@@ -135,7 +152,8 @@ export default function ModelConfiguration({
               </div>
               <p className="hint">
                 使用 Fluxport 的独立 LLM
-                密钥；资料分析、多空讨论和最终决策均使用 gpt-6-sol。
+                密钥；资料分析、多空讨论和最终决策均使用{" "}
+                {form.fluxport_model || "gpt-6-sol"}。
               </p>
             </>
           ) : selected === "grsai" ? (
